@@ -4,7 +4,7 @@
 Music Companion
 
 ## Project Summary
-Music Companion is an AI-powered music application that extends a base content-based recommender into a broader AI-assisted system. The project combines recommendation, listening-history analysis, recap generation, and sheet music matching in one repository. It is designed to show how retrieval, ranking, summarization, and validation can work together in a user-facing music app.
+Music Companion is an AI-powered music application that extends a base content-based recommender into a broader system for recommendation, listening-history analysis, recap generation, and sheet music matching.
 
 ## Base Functionality
 The base system is a content-based music recommender implemented in [src/recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/src/recommender.py). Songs are represented by structured metadata, and users are represented by a taste profile. The system scores each song against the profile and returns the highest-ranked results.
@@ -80,6 +80,8 @@ The system includes planned validation and fallback behavior:
 - logging captures retrieval and ranking steps
 - fallback summaries are used when data is insufficient
 
+These are the main advanced AI components of the project and they are integrated directly into the recommendation, recap, and matching workflows.
+
 ## Inputs
 The full application design accepts:
 
@@ -111,7 +113,7 @@ The current implementation is strongest on song-level recommendation because the
 
 ## How the System Works
 ### Base Recommender
-The system loads songs, compares each song to a structured user profile, computes a weighted score, and returns the top-ranked results. Explanations list which features contributed to the score.
+The system loads songs, compares each song to a structured user profile, computes a weighted score, and returns the top-ranked results.
 
 ### Similar Song Recommendation
 The system will retrieve a seed song from the catalog, reuse its features as a similarity profile, and rank other songs against that seed.
@@ -183,7 +185,7 @@ The testing plan covers:
 - instrument and difficulty filtering for sheet music matches
 - edge cases involving missing or ambiguous inputs
 
-## Current Testing Results
+## Current Testing Status
 The current repository already includes tests for the base recommender in [tests/test_recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/tests/test_recommender.py). Manual evaluation of the base system found:
 
 - strong performance when profile preferences align with the catalog
@@ -191,7 +193,16 @@ The current repository already includes tests for the base recommender in [tests
 - better result variety when diversity penalties are enabled
 - visible failure cases for rare genres, exact-match rigidity, and sparse catalog coverage
 
-The expanded workflows will require additional tests once the new datasets and modules are implemented.
+The expanded workflows are still under implementation and will require additional automated tests once the new datasets and modules are added.
+
+## Planned Evaluation
+The next evaluation steps are:
+
+- unit tests for song search and seed-song retrieval
+- ranking checks for similar-song recommendation
+- validation checks for monthly and yearly recap statistics
+- error-handling tests for missing song queries and missing sheet music
+- manual review of recommendation quality and recap accuracy
 
 ## Human-AI Collaboration Reflection
 AI tools were useful during the design process for brainstorming user workflows, naming modules, framing system architecture, and refining documentation structure. They also helped surface blind spots such as catalog bias, popularity feedback loops, and the need to separate base functionality from AI-enhanced functionality in the documentation.

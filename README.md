@@ -8,7 +8,12 @@ Music Companion is an AI-powered music discovery and reflection app built on top
 3. Monthly and yearly listening recap generation
 4. Sheet music matching for light music, especially piano and guitar
 
+This project integrates Retrieval-Augmented Generation (RAG) and a reliability-focused validation layer into its main application logic.
+
 Its main goal is to show how retrieval, ranking, summarization, and guardrails can work together inside one music application.
+
+## Original Project
+This project extends the original **Music Recommender Simulation** from Modules 1 to 3. The original version represented songs and user preferences as structured data, applied weighted feature matching to score songs, and returned ranked recommendations with short explanations. It already supported multiple scoring modes and diversity-aware ranking, but it did not yet include retrieval-driven song search, listening-history analysis, recap generation, or sheet music matching.
 
 ## Base Functionality
 The base project is a content-based music recommender simulation. Each song in the catalog is represented with structured metadata such as genre, mood, energy, acousticness, instrumentalness, popularity, decade, language, duration, and mood tags. A user profile stores preferences over those features, and the system assigns a score to each song based on how closely the song matches the profile.
@@ -85,7 +90,7 @@ The project also includes a reliability layer:
 These guardrails are part of the application logic and are intended to reduce unsupported or misleading outputs.
 
 ## System Architecture
-The final system diagram should be stored in `assets/` and either embedded here as an image or represented as a Mermaid diagram.
+The system architecture diagram is stored in the `assets/` folder and can be embedded here as an image or represented as a Mermaid diagram.
 
 ```mermaid
 flowchart TD
@@ -116,7 +121,12 @@ flowchart TD
     Q --> R
 
     R --> S[Logging and Guardrails]
+    R --> T[Validation and Tests]
+    T --> U[Human Review]
 ```
+
+## Architecture Overview
+The system is organized around a retrieval-first pipeline. User input enters through the command-line interface and is routed into one of the main workflows: similar-song search, habit-based recommendation, listening recap, or sheet music matching. Each workflow retrieves structured context from the relevant dataset before ranking, summarization, or matching takes place. The output is then checked through validation, logging, planned automated tests, and human review so that the system can surface grounded results and make failures easier to inspect.
 
 ## Repository Structure
 ```text
@@ -179,6 +189,7 @@ python -m src.main sheet --song "Song Title" --instrument piano
 ```
 
 ## Example Workflows
+The following workflows describe the intended command-line interface for the expanded app. The current repository fully supports the base recommender flow, and the extended workflows will be added incrementally.
 ### Example 1: Similar Song Search
 Input:
 
@@ -186,11 +197,17 @@ Input:
 python -m src.main similar --song "Yellow"
 ```
 
-Expected output:
+Target output:
 
 - retrieved seed song
 - top similar songs
 - explanation of shared features
+
+Example interaction summary:
+
+- The system identifies the searched song as the seed track.
+- It retrieves the seed track's metadata and builds a similarity profile.
+- It returns several similar songs along with a brief explanation of the shared features.
 
 ### Example 2: Habit-Based Recommendation
 Input:
@@ -199,11 +216,17 @@ Input:
 python -m src.main recommend --user user_001
 ```
 
-Expected output:
+Target output:
 
 - recommended songs
 - recommended albums
 - short taste profile summary
+
+Example interaction summary:
+
+- The system aggregates the user's listening history into a taste profile.
+- It retrieves and ranks songs and albums that align with the user's dominant genres, moods, and energy patterns.
+- It summarizes the user's overall listening habits in a few sentences.
 
 ### Example 3: Yearly Wrapped
 Input:
@@ -212,12 +235,18 @@ Input:
 python -m src.main wrapped --user user_001 --period year --year 2026
 ```
 
-Expected output:
+Target output:
 
 - top 10 songs
 - top artists
 - top albums
 - yearly taste summary
+
+Example interaction summary:
+
+- The system filters listening history by the requested time period.
+- It computes the user's most-played songs, artists, and albums for that period.
+- It generates a concise taste summary grounded in those statistics.
 
 ### Example 4: Sheet Music Matching
 Input:
@@ -226,11 +255,17 @@ Input:
 python -m src.main sheet --song "River Flows in You" --instrument piano
 ```
 
-Expected output:
+Target output:
 
 - matching sheet music entries
 - instrument fit
 - difficulty notes
+
+Example interaction summary:
+
+- The system retrieves sheet music entries that match the requested song and instrument.
+- It ranks the best matches using instrument fit and optional difficulty.
+- It returns the most suitable sheet music result with a short explanation.
 
 ## Demo Walkthrough
 Add one of the following before submission:
@@ -257,7 +292,7 @@ The repository already includes several screenshots from the original recommende
 - ![Stress test 6](assets/image-20260412203845449.png)
 
 ## Logging and Guardrails
-The final system is expected to include:
+The expanded system is planned to include:
 
 - structured logging for retrieval, ranking, and recap generation
 - safe handling of missing song queries
@@ -265,13 +300,16 @@ The final system is expected to include:
 - recap validation against computed statistics
 - fallback messaging for insufficient listening history or missing sheet music
 
-## Testing
+## Current Testing Status
 Run the current test suite with:
 
 ```bash
 pytest
 ```
 
+At the moment, the repository includes starter tests for the base recommender. The extended workflows described above are still being implemented, so their reliability checks are documented as a testing plan rather than completed results.
+
+## Testing Plan
 The expanded test plan should cover:
 
 - seed-song retrieval correctness
@@ -281,6 +319,16 @@ The expanded test plan should cover:
 - recap validation logic
 - sheet music matching behavior
 - edge cases for missing or ambiguous data
+
+## Testing Summary
+The project currently includes starter tests for the base recommender and a written testing plan for the expanded workflows. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the new workflows will be added after implementation and verification.
+
+## Design Decisions
+- The project keeps the original rule-based scoring engine because it is transparent, explainable, and easier to validate than a fully opaque recommendation model.
+- Retrieval happens before generation so that recommendations, summaries, and explanations are grounded in structured music data rather than produced from an empty prompt.
+- The system is organized as multiple focused workflows instead of one general chatbot so that each use case can be developed, tested, and debugged separately.
+- Validation and logging are treated as product features rather than afterthoughts because recommendation systems can sound convincing even when their outputs are unsupported.
+- The current design favors explainability and reproducibility over maximum realism; this is a deliberate trade-off given the project scope and dataset size.
 
 ## Results and Observations
 The base recommender already demonstrates several useful behaviors:
@@ -314,4 +362,4 @@ These observations motivate the move toward retrieval-driven workflows and stron
 - richer album and playlist recommendation
 
 ## Reflection
-For a deeper discussion of biases, risks, testing, and human-AI collaboration, see [model_card.md](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/model_card.md).
+Building Music Companion reinforced that useful AI systems depend on more than generation alone. Retrieval, ranking, validation, and fallback behavior all matter if the system is expected to produce outputs that are understandable and trustworthy. This project also highlighted a practical trade-off: explainable systems are easier to debug and document, but they still depend heavily on the quality and coverage of the underlying data. For a deeper discussion of biases, risks, testing, and human-AI collaboration, see [model_card.md](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/Music-Companion/model_card.md).
