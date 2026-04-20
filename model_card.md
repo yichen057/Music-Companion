@@ -1,124 +1,217 @@
-# Model Card: Music Recommender Simulation
+# Model Card: Music Companion
 
-## 1. Model Name
+## System Name
+Music Companion
 
-**VibeFinder 1.0**
+## Project Summary
+Music Companion is an AI-powered music application that extends a base content-based recommender into a broader AI-assisted system. The project combines recommendation, listening-history analysis, recap generation, and sheet music matching in one repository. It is designed to show how retrieval, ranking, summarization, and validation can work together in a user-facing music app.
 
----
+## Base Functionality
+The base system is a content-based music recommender implemented in [src/recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/src/recommender.py). Songs are represented by structured metadata, and users are represented by a taste profile. The system scores each song against the profile and returns the highest-ranked results.
 
-## 2. Intended Use
+The current scoring system uses:
 
-VibeFinder suggests songs from a small 18-song catalog based on a user's taste profile. It takes in preferences like favorite genre, mood, energy level, decade, language, mood tags, and a few yes/no flags, then ranks every song by how well it fits.
+- genre matching
+- mood matching
+- energy similarity
+- acousticness preference matching
+- instrumentalness preference matching
+- popularity preference matching
+- decade proximity
+- mood-tag overlap
+- language matching
+- duration proximity
+- replay-value matching
 
-It assumes each user has one fixed set of preferences. It does not learn or adapt over time. It is built for classroom exploration, not for real music streaming. It should not be used to make decisions about what music to license, promote, or remove.
+The base recommender also supports multiple scoring modes and an optional diversity penalty.
 
----
+## AI-Enhanced Functionality
+The expanded application design adds four higher-level workflows.
 
-## 3. How the Model Works
+### 1. Similar Song Recommendation
+The user searches for a song, and the system retrieves the seed song's metadata before ranking other songs with similar attributes.
 
-Each song gets a score from 0 to 10.0 (Balanced mode) based on how well it matches the user's preferences. The system checks 11 things:
+### 2. Habit-Based Recommendation
+The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits.
 
-- **Genre** (1.0 points): Does the song's genre exactly match the user's favorite? If yes, +1.0. If no, +0.
-- **Mood** (1.0 points): Same idea. Exact match = +1.0, otherwise nothing.
-- **Energy** (up to 2.0 points): How close is the song's energy to the user's target? A perfect match earns 2.0. The farther apart they are, the fewer points.
-- **Acoustic** (0.5 points): Is the song acoustic, and does the user want acoustic? If they agree, +0.5.
-- **Instrumental** (0.5 points): Same logic for instrumental tracks.
-- **Popularity** (0.5 points): Same logic for mainstream vs. niche preference.
-- **Decade proximity** (up to 1.0 points): How close is the release decade to the user's preferred era? Uses a 40-year max span.
-- **Mood tags** (up to 1.5 points): Detailed tags like "dreamy", "aggressive", "nostalgic." Each matching tag earns 0.3 points, capped at 1.5.
-- **Language** (1.0 points): Does the lyrics language match the user's preference? Exact match = +1.0.
-- **Duration** (up to 0.5 points): How close is the song's length to the user's preferred duration? 5-minute tolerance.
-- **Replay value** (0.5 points): Is the song highly replayable, and does the user care about that?
+### 3. Monthly and Yearly Music Wrapped
+The system summarizes listening activity over time and generates a recap with top songs, top artists, top albums, and a taste summary.
 
-The system supports three scoring modes (Balanced, Genre-First, Energy-Focused) via a Strategy pattern. Each mode uses different weights but the same scoring logic. An optional diversity penalty prevents the same artist or genre from dominating the top results.
+### 4. Sheet Music Matching
+The system retrieves sheet music resources that best match a requested song, instrument, and difficulty level, especially for piano and guitar.
 
-We started with genre weighted at 2.0 and energy at 1.0. During testing, we found genre was too dominant. We flipped them: genre down to 1.0, energy up to 2.0.
+## Intended Use
+This project is intended for:
 
----
+- experimentation with explainable recommendation workflows
+- testing retrieval-based recommendation and recap logic
+- lightweight music discovery and reflection scenarios
 
-## 4. Data
+It is not intended for:
 
-The catalog has 18 songs stored in a CSV file. Each song has 16 attributes: title, artist, genre, mood, energy, tempo, valence, danceability, acousticness, instrumentalness, popularity, release_decade, mood_tags, lyrics_language, duration_sec, and replay_value.
+- commercial music streaming deployment
+- music licensing or rights decisions
+- professional sheet music publishing
+- high-stakes decision-making
 
-There are 14 different genres, but most have only 1 song. Lofi has 3 songs and pop has 2. Moods include happy, chill, intense, melancholy, aggressive, and others — 14 unique values total. Languages include english (11 songs), instrumental (5), spanish (1), and japanese (1).
+## Intended Users
+The system is designed for:
 
-Energy ranges from 0.22 (Sunday Morning Tea) to 0.96 (Basement Fury). Release decades span from 1990 to 2020. Duration ranges from 180 to 345 seconds.
+- music listeners exploring similar songs
+- users who want general music and album recommendations
+- users who want monthly or yearly listening summaries
+- beginner and casual musicians searching for piano or guitar sheet music
 
-The dataset is missing some common genres like country, reggae, and k-pop. There are no songs that combine unusual trait pairs — like calm metal or energetic classical — which limits testing. Three features in the CSV (tempo, valence, danceability) are not used by the scoring function.
+## Core AI Features
+### Retrieval-Augmented Generation
+The system retrieves structured context before producing outputs. For example:
 
----
+- song search retrieves seed-song metadata before recommending similar tracks
+- listening recap retrieves aggregated statistics before generating summary text
+- sheet music matching retrieves music-sheet entries before ranking options
 
-## 5. Strengths
+This grounding step is central to the system design.
 
-The system works well when a user's preferences line up cleanly with a song in the catalog. For example:
+### Reliability and Validation
+The system includes planned validation and fallback behavior:
 
-- The **Chill Lofi Listener** got Library Rain as #1 with 9.37/10.0. Nearly every feature matched, including mood tags (dreamy + cozy + peaceful).
-- The **High-Energy Pop Fan** got Sunrise City at 9.04/10.0. Mood tags and decade proximity added useful differentiation beyond the original 6 features.
-- The **Deep Intense Rock** profile got Storm Runner at 9.37/10.0. All three mood tags (aggressive, powerful, driving) matched perfectly.
+- recap outputs are checked against computed statistics
+- missing or ambiguous inputs are handled safely
+- logging captures retrieval and ranking steps
+- fallback summaries are used when data is insufficient
 
-The explanation output is a strength. Each recommendation shows exactly which features matched and how many points each one earned. The tabulate formatted tables make it easy to compare results at a glance.
+## Inputs
+The full application design accepts:
 
-The Strategy pattern lets users switch between Balanced, Genre-First, and Energy-Focused modes to see how the same profile produces different results under different philosophies.
+- song title queries
+- user identifiers
+- listening history records
+- recap time windows such as month or year
+- sheet music requests with instrument and optional difficulty
 
-The diversity penalty breaks filter bubbles. Without it, the Chill Lofi Listener gets three lofi songs (two by LoRoom) in the top 3. With it, an ambient track surfaces at #2, giving the user variety.
+## Outputs
+The system may return:
 
----
+- similar-song recommendations
+- personalized song and album recommendations
+- monthly and yearly listening recaps
+- sheet music matches
+- explanation text grounded in retrieved metadata
 
-## 6. Limitations and Bias
+## Data Sources
+### Current Data
+- [data/songs.csv](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/data/songs.csv)
 
-The system uses exact string matching for genre and mood. "Pop" and "indie pop" get zero partial credit, even though they sound similar. Same for "chill" and "relaxed."
+### Planned Data
+- `data/albums.csv`
+- `data/listening_history.csv`
+- `data/sheet_music.csv`
 
-This creates a filter bubble for rare genres. Classical, metal, folk, and world each have only 1 song. The diversity penalty helps by preventing the same genre from repeating, but users of rare genres still have only one matching song.
+The current implementation is strongest on song-level recommendation because the repository already includes a song catalog. The remaining workflows depend on the planned datasets being added and validated.
 
-During testing, the Chill Metal Listener profile asked for chill, low-energy music. The system originally recommended Basement Fury (aggressive, energy 0.96) as #1 because the old genre weight of 2.0 overpowered everything else. After the weight shift, Basement Fury dropped — but adding advanced features (decade, language) accidentally pushed it back to #1 in Balanced mode. More features do not automatically improve accuracy.
+## How the System Works
+### Base Recommender
+The system loads songs, compares each song to a structured user profile, computes a weighted score, and returns the top-ranked results. Explanations list which features contributed to the score.
 
-The scoring function still ignores tempo, valence, and danceability. Dance-oriented and tempo-sensitive listeners remain invisible.
+### Similar Song Recommendation
+The system will retrieve a seed song from the catalog, reuse its features as a similarity profile, and rank other songs against that seed.
 
-The language feature introduces a new bias: 11 of 18 songs are English. Non-English users (Spanish, Japanese) have only 1 song each that can earn the +1.0 language bonus.
+### Habit-Based Recommendation
+The system will aggregate listening history into summary statistics such as top genres, top artists, top moods, and typical energy levels, then convert those signals into recommendation targets.
 
-The popularity feature creates a feedback loop. Songs below the 0.5 popularity threshold can never earn the +0.5 bonus for mainstream users.
+### Monthly and Yearly Wrapped
+The system will filter listening history by time period, compute top songs, artists, and albums, and generate a natural-language recap grounded in those statistics.
 
----
+### Sheet Music Matching
+The system will retrieve matching sheet music resources based on song title, instrument, and optionally difficulty, then rank the best available options.
 
-## 7. Evaluation
+## Strengths
+- The base recommender is transparent and explainable.
+- Weighted feature matching makes recommendation behavior easy to inspect.
+- Diversity penalties reduce repetitive results.
+- Retrieval-based design keeps generated text tied to real data.
+- The application covers both recommendation and reflective summary use cases.
 
-We tested six user profiles across three scoring modes, with and without diversity penalties.
+## Limitations
+- The current repository uses a small and partially simulated music catalog.
+- Recommendation quality depends heavily on metadata quality.
+- The current scoring logic is metadata-based rather than audio-based.
+- The planned recap and sheet-music workflows require more datasets than are currently present.
+- Exact string matching can be too rigid for related moods or genres.
 
-**Standard profiles (Balanced mode):**
-- High-Energy Pop Fan — Sunrise City scored 9.04/10.0. Matched intuition.
-- Chill Lofi Listener — Library Rain scored 9.37/10.0. Matched intuition.
-- Deep Intense Rock — Storm Runner scored 9.37/10.0. Matched intuition.
+## Biases and Risks
+### Metadata Bias
+If tags such as genre, mood, or language are incomplete or inconsistent, recommendations may be skewed.
 
-**Adversarial profiles:**
-- Sad But Energetic (classical + melancholy + high energy) — Ghost Waltz won at 7.39 despite energy mismatch. Genre + mood + decade + language bonus outweighed everything.
-- Acoustic Popular Pop (pop + happy + acoustic) — Sunrise City won at 8.54 even though it is not acoustic.
-- Chill Metal Listener — Results varied by mode: Basement Fury #1 in Balanced (5.76) and Genre-First (6.28), Coffee Shop Stories #1 in Energy-Focused (5.48).
+### Catalog Coverage Bias
+Genres with only one or two songs are disadvantaged compared with genres that have more entries.
 
-**Diversity testing (Chill Lofi Listener):**
-- Without diversity: top 3 = Library Rain, Midnight Coding (LoRoom), Focus Flow (LoRoom). Two by LoRoom, all lofi.
-- With diversity: top 3 = Library Rain, Spacewalk Thoughts (ambient), Midnight Coding (-1.5 genre penalty). Ambient track surfaces.
+### Popularity Bias
+Songs marked as popular may receive repeated advantages, while niche songs remain buried.
 
-We hand-calculated scores for key songs and verified all calculations matched program output.
+### Language Bias
+If the catalog contains mostly one language, multilingual or non-English listeners may receive weaker personalization.
 
----
+### Summary Simplification Risk
+Monthly or yearly recap text may oversimplify a user's listening identity if it compresses diverse behaviors into a small number of labels.
 
-## 8. Future Work
+## Failure Cases
+- the song query does not match any title in the catalog
+- multiple songs match the same query ambiguously
+- listening history is too sparse to build a stable taste profile
+- top recap outputs conflict with summary text
+- no sheet music exists for the requested instrument or difficulty
 
-- **Add genre similarity.** Instead of exact matching, give partial credit for related genres. Pop and indie pop could earn 0.5 instead of 0.0.
-- **Use the remaining unused features.** Tempo, valence, and danceability are still in the CSV but not scored. A dance-loving user should not get Ghost Waltz (danceability 0.28) when Neon Cumbia (0.92) exists.
-- **Tune diversity penalties per mode.** The current penalties (-3.0 artist, -1.5 genre) are fixed. They could be mode-specific — Genre-First mode might use a smaller genre penalty.
-- **Add a user-facing mode selector.** A CLI flag like `--mode energy-focused --diverse` would let users switch modes without editing main.py.
+## Guardrails
+The full project design includes:
 
----
+- input validation for CLI arguments and dataset fields
+- fallback responses for missing song or sheet music matches
+- recap validation against computed statistics
+- logging of retrieval, ranking, and validation decisions
+- safe handling of insufficient listening history
 
-## 9. Personal Reflection
+## Testing Strategy
+The testing plan covers:
 
-My biggest learning moment came in two parts. First, watching genre weight at 2.0 break the Chill Metal recommendation — the system handed back aggressive thrash metal to someone asking for calm music. That taught me weights are design decisions, not just numbers.
+- correctness of base recommender ranking
+- exact and partial song-query matching
+- exclusion of the seed song from similar-song outputs
+- user-history aggregation and profile building
+- recap statistics for monthly and yearly filtering
+- validation checks for recap consistency
+- instrument and difficulty filtering for sheet music matches
+- edge cases involving missing or ambiguous inputs
 
-The deeper lesson came when adding five new features. I expected the system to get smarter. Instead, Basement Fury climbed back to #1 for Chill Metal because it gained decade and language bonuses. More features do not automatically mean better results. Every new feature can help one profile and hurt another.
+## Current Testing Results
+The current repository already includes tests for the base recommender in [tests/test_recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/tests/test_recommender.py). Manual evaluation of the base system found:
 
-I used Claude to help design adversarial profiles, implement the Strategy pattern, build the diversity penalty, and format output with tabulate. It was useful for spotting data tensions — like the fact that acoustic songs are almost never popular. But I had to hand-verify every score calculation. AI tools accelerate work, but verification is still my responsibility.
+- strong performance when profile preferences align with the catalog
+- improved behavior after reducing genre dominance and increasing energy weight
+- better result variety when diversity penalties are enabled
+- visible failure cases for rare genres, exact-match rigidity, and sparse catalog coverage
 
-I was surprised that if-statements, addition, and a greedy loop can produce results that genuinely feel like a real recommender. When Library Rain scored 9.37 with mood tags like "dreamy + cozy + peaceful," it felt like the system understood the vibe. It did not — it just matched strings and added numbers. The illusion breaks when preferences conflict, and that is where adversarial testing is essential.
+The expanded workflows will require additional tests once the new datasets and modules are implemented.
 
-The diversity penalty was the most satisfying feature. It solved a real user experience problem with simple subtraction. The Strategy pattern showed me why design patterns exist — not for complexity, but for making changes easy. This project changed how I think about Spotify. When a recommendation feels wrong, it might be a weight, a missing feature, a catalog gap, or a lack of diversity logic. Recommender systems are never "done" — they are a series of trade-offs made visible through evaluation.
+## Human-AI Collaboration Reflection
+AI tools were useful during the design process for brainstorming user workflows, naming modules, framing system architecture, and refining documentation structure. They also helped surface blind spots such as catalog bias, popularity feedback loops, and the need to separate base functionality from AI-enhanced functionality in the documentation.
+
+However, implementation details still require manual verification. Score calculations, ranking behavior, dataset design, and testing logic must be checked directly in code. AI assistance accelerated planning and writing, but it did not replace the need for precise engineering decisions or manual validation.
+
+## Changes from the Base Project
+Compared with the original music recommender simulation, this expanded project adds a broader product direction:
+
+- similar-song retrieval from song search
+- listening-history-based personalization
+- monthly and yearly listening recaps
+- sheet music matching
+- logging and validation as first-class design requirements
+
+The original weighted recommender remains the core ranking component.
+
+## Future Work
+- AI performer workflows
+- Suno-style reinterpretation prompts
+- multi-instrument arrangement planning
+- audio embeddings for richer similarity search
+- stronger evaluation metrics for personalization quality
