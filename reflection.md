@@ -65,3 +65,80 @@ The penalty values (-3.0 for artist, -1.5 for genre) were chosen to be strong en
 Switching from plain text to tabulate tables made a bigger difference than expected. The summary table lets you scan all 5 recommendations at a glance — title, artist, genre, mood, energy, score — without reading through walls of text. The detail cards underneath explain why each song was picked, with `+` for bonuses and `-` for diversity penalties. This two-layer format (overview first, details on demand) mirrors how real dashboards present information.
 
 The formatted output also made debugging easier. When comparing results across modes, the table format made it obvious when rankings shifted — you could see at a glance that Spacewalk Thoughts jumped from #4 to #2 when diversity was turned on, without having to count through paragraphs of text.
+
+---
+
+# AI Integration Reflection: Feature 1 and Feature 2
+
+## Overview
+The AI integration work added Gemini to two parts of Music Companion, but in both cases the final design keeps the deterministic recommender in control of recommendation decisions. Gemini is used for language understanding and explanation, while local retrieval, scoring, validation, and fallback logic protect the system from unsupported AI outputs.
+
+## Feature 1: Similar-Song Intent Parsing
+Feature 1 starts with a searched seed song. The system retrieves that song from `data/songs.csv`, builds a similarity profile from its metadata, and ranks other songs with the existing scoring engine. Gemini is optional and is only called when the user provides a natural-language intent such as `more energetic but still instrumental for studying`.
+
+The first design question was whether Gemini should directly decide recommendations. The final answer was no. Direct AI ranking would make the system harder to test and explain. Instead, Gemini parses intent into structured fields such as `energy_delta`, `preferred_mood`, `preferred_tags`, `required_language`, and instrumental/acoustic preferences. The local ranking engine then applies those fields to the seed-song profile and scores catalog songs normally.
+
+### Failure Experience
+The first Gemini failures were API-level failures, including HTTP errors from model access, permissions, or request setup. This exposed an important reliability requirement: the app should not require the user to manually decide whether Gemini is available. If Gemini fails, the system should continue automatically.
+
+The second issue was that common intents often produced the same result from Gemini and the local fallback parser. This was not a bug. For simple phrases, the rule-based parser can correctly identify obvious signals like `more energetic`, `instrumental`, or `study`. Gemini becomes more useful for nuanced language, such as `same cozy rainy-night feeling but less sleepy`, where it can infer a softer adjustment than a keyword parser.
+
+### Final Handling
+The final Feature 1 implementation uses a two-layer parser:
+
+- Gemini parser when `GEMINI_API_KEY` is available and `--intent` is provided.
+- Local rule-based fallback if Gemini is disabled, unavailable, times out, or returns invalid output.
+
+The CLI clearly reports which parser was used and separates three different confidence concepts:
+
+- `Search confidence`: how confidently the seed song query matched a catalog song.
+- `Intent confidence`: how confidently Gemini or the fallback parser understood the user's intent.
+- `Song score`: how well each candidate song matches the final adjusted profile.
+
+This made the system easier to debug because API failures, search ambiguity, and recommendation quality are not collapsed into one number.
+
+## Feature 2: Listening-History Playlist Explanations
+Feature 2 recommends songs and albums from user listening history. The local system aggregates play history, builds a taste profile, ranks songs and albums, and groups ranked songs into playlist packages. The intended AI role was to turn those retrieved signals into human-readable playlist explanations.
+
+The first implementation asked Gemini to return structured JSON containing playlist packages, descriptions, and song IDs. This was too fragile. Gemini sometimes timed out because the prompt was too large. After reducing the prompt, Gemini returned malformed JSON. Adding JSON parsing cleanup, response schema, lower temperature, and higher output token limits improved the design but did not fully solve the issue. The model still occasionally returned invalid JSON such as missing delimiters.
+
+### Failure Experience
+The main Feature 2 failures were:
+
+- `TimeoutError`: Gemini did not respond within the configured timeout.
+- `HTTPError_404`: the selected model name was not supported by the current Gemini API endpoint.
+- `HTTPError_429`: the selected model had no available quota or exceeded rate limits.
+- `JSONDecodeError`: Gemini returned text that was not valid JSON even when JSON was requested.
+
+The quota debugging also showed that model availability is model-specific. For example, a model can be listed with zero quota in the current project, causing a 429 even though the API key is valid. This made it important to report fallback reasons directly in the CLI instead of hiding all AI failures behind a generic message.
+
+### Final Handling
+The final Feature 2 design changed the boundary between AI and deterministic code. Gemini no longer generates playlist JSON and no longer controls `song_ids`. Instead:
+
+1. The app aggregates listening history locally.
+2. The app builds a taste profile locally.
+3. The app ranks songs and albums locally.
+4. The app builds playlist packages locally.
+5. Gemini receives a compact prompt containing only the profile summary, top listening signals, top ranked songs, top ranked albums, package names, and optional context.
+6. Gemini returns plain text lines in a fixed format: `Package Name: explanation`.
+7. The app parses those lines and attaches the explanations to the deterministic package structure.
+8. If Gemini fails, deterministic package explanations are used instead.
+
+This final design is more reliable because the AI output is no longer trusted as application state. Gemini contributes useful language, but local code preserves recommendation correctness.
+
+## Final Result
+Feature 1 now successfully supports Gemini-powered intent parsing with automatic fallback. Feature 2 now successfully supports Gemini-generated playlist explanations grounded in retrieved listening history and ranked candidates. The successful Feature 2 output is labeled in the CLI as:
+
+```text
+AI-generated section: Gemini created these package explanations from retrieved history and ranked candidates.
+- source: gemini
+```
+
+The test suite currently passes with:
+
+```text
+26 passed
+```
+
+The most important lesson is that reliable AI integration depends on choosing the right responsibility boundary. AI is useful for understanding language and writing explanations, but deterministic code should own retrieval, ranking, IDs, validation, and fallback behavior.
+

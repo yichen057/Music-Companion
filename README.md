@@ -41,12 +41,15 @@ python3 -m src.main similar --song "Library Rain" --intent "more energetic but s
 ```
 
 ### 2. Habit-Based Recommendation
-The system analyzes a user's listening history, builds a taste profile, and recommends songs and albums that fit that profile.
+The system analyzes a user's listening history, builds a taste profile, and recommends songs and albums that fit that profile. It aggregates play counts, completed plays, genres, moods, languages, artists, tags, and average energy before ranking new songs and albums. It then groups ranked songs into playlist packages such as `Core Taste Mix`, `Context Fit`, and `Discovery Stretch`.
 
-Planned CLI:
+Gemini is used only after retrieval and ranking are complete. The app sends a compact context containing the taste profile, top listening signals, top ranked songs, top ranked albums, package names, and optional user context. Gemini returns short package explanations in a fixed line-based format, while the local application keeps control of song IDs, playlist structure, validation, and fallback behavior.
+
+Implemented CLI:
 
 ```bash
 python3 -m src.main recommend --user user_001
+python3 -m src.main recommend --user user_001 --context "rainy night study"
 ```
 
 ### 3. Monthly and Yearly Music Wrapped
@@ -83,6 +86,8 @@ The generated output is therefore grounded in retrieved data rather than produce
 ### Gemini Intent Parsing
 For similar-song search, Gemini is used as a constrained intent parser. It does not directly choose songs. Instead, it converts natural-language requests into structured fields such as `energy_delta`, `preferred_mood`, `required_language`, and `preferred_tags`. The deterministic scoring engine then uses those fields to rank songs, which keeps the final recommendation explainable and testable.
 
+For habit-based recommendation, Gemini is used as a grounded playlist explainer. The local system first aggregates listening history, ranks songs and albums, and builds playlist packages. Gemini then receives a compact retrieved context and writes only the `why_it_fits` explanation for each package. It does not choose songs, invent IDs, or change package membership.
+
 ### Reliability and Validation
 The project also includes a reliability layer:
 
@@ -90,8 +95,9 @@ The project also includes a reliability layer:
 - missing or ambiguous queries trigger fallback behavior
 - invalid inputs are handled safely
 - retrieval and ranking steps are logged for debugging
-- Gemini outputs are validated and clamped before they affect ranking
-- a local rule-based parser is used when Gemini is unavailable
+- Gemini intent outputs are validated and clamped before they affect ranking
+- Gemini playlist explanations are attached to locally generated package structures rather than trusted to define recommendation membership
+- local deterministic fallback explanations are used when Gemini is unavailable, times out, exceeds quota, or returns an unparsable response, and the CLI labels deterministic, AI-generated, and fallback sections explicitly
 
 These guardrails are part of the application logic and are intended to reduce unsupported or misleading outputs.
 
@@ -114,6 +120,10 @@ flowchart TD
     D --> J[Aggregate Listening History]
     J --> K[Build Taste Profile]
     K --> L[Recommend Songs and Albums]
+    L --> W[Build Playlist Packages]
+    W --> X[Gemini Writes Package Explanations]
+    X --> Y[Validate and Attach Explanations]
+    Y --> R
 
     E --> M[Aggregate Time-Bounded Stats]
     M --> N[Generate Recap Summary]
@@ -123,7 +133,6 @@ flowchart TD
     P --> Q[Rank by Instrument and Difficulty]
 
     I --> R[CLI Output]
-    L --> R
     O --> R
     Q --> R
 
@@ -147,17 +156,19 @@ requirements.txt
 ```
 
 ## Data
-### Current Dataset
-The repository currently includes [data/songs.csv](data/songs.csv), which stores the music catalog used by the base recommender.
+### Current Datasets
+The repository currently includes:
 
-### Planned Datasets
+- [data/songs.csv](data/songs.csv), which stores the song catalog used by the base recommender and similar-song search.
+- [data/albums.csv](data/albums.csv), which stores album-level metadata for habit-based album recommendation.
+- [data/listening_history.csv](data/listening_history.csv), which stores simulated user listening logs with timestamps and play counts.
+
+### Planned Dataset
 The full application design also expects:
 
-- `data/albums.csv` for album-level metadata
-- `data/listening_history.csv` for user listening logs with timestamps
 - `data/sheet_music.csv` for sheet music matching
 
-These datasets will support features 2 to 4.
+This dataset will support Feature 4.
 
 ## Setup
 ### 1. Create a virtual environment
@@ -172,16 +183,24 @@ pip install -r requirements.txt
 ```
 
 ### 3. Optional: configure Gemini
-Gemini intent parsing is optional. If no API key is configured, the app uses a local fallback parser. If Gemini is configured but times out or fails, the app automatically uses the fallback parser and reports the fallback reason.
+Gemini intent parsing and playlist explanations are optional. If no API key is configured, the app uses local fallback behavior. If Gemini is configured but times out or fails, the app automatically uses the fallback parser or deterministic playlist explanations and reports the fallback reason.
+
+Create a local `.env` file in the project root:
 
 ```bash
-export GEMINI_API_KEY="your-api-key"
+touch .env
 ```
 
-The default Gemini model is `gemini-2.5-flash`. You can override it if needed:
+Add your Gemini API key to `.env`:
 
 ```bash
-export GEMINI_MODEL="gemini-2.0-flash"
+GEMINI_API_KEY=your-api-key
+```
+
+The app loads `.env` automatically through `python-dotenv`, so you do not need to export the key every time. The default Gemini model is `gemini-2.5-flash`. You can override it in `.env` if needed:
+
+```bash
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
 Do not commit API keys to the repository. Local `.env` files are ignored by git.
@@ -207,6 +226,14 @@ python3 -m src.main similar --song "Library Rain" --intent "more energetic but s
 python3 -m src.main similar --song "Library Rain" --intent "more energetic but still instrumental for studying" --no-gemini
 ```
 
+It also supports Feature 2, habit-based song and album recommendation:
+
+```bash
+python3 -m src.main recommend --user user_001
+python3 -m src.main recommend --user user_001 --k 3 --albums-k 2
+python3 -m src.main recommend --user user_001 --context "rainy night study" --no-gemini
+```
+
 ### CLI Flags and Confidence Scores
 The `--k` flag controls how many recommendations are returned. For example, `--k 3` returns the top three similar songs; it does not control whether Gemini is called.
 
@@ -224,14 +251,13 @@ For common requests, the local rule-based fallback often agrees with Gemini. For
 These commands represent the target interface for the remaining expanded workflows:
 
 ```bash
-python3 -m src.main recommend --user user_001
 python3 -m src.main wrapped --user user_001 --period month --month 2026-04
 python3 -m src.main wrapped --user user_001 --period year --year 2026
 python3 -m src.main sheet --song "Song Title" --instrument piano
 ```
 
 ## Example Workflows
-The following workflows describe the command-line interface for the expanded app. Similar-song search is implemented; the remaining workflows will be added incrementally.
+The following workflows describe the command-line interface for the expanded app. Similar-song search and habit-based recommendation are implemented; the remaining workflows will be added incrementally.
 ### Example 1: Similar Song Search
 Input:
 
@@ -263,20 +289,22 @@ Example interaction summary:
 Input:
 
 ```bash
-python3 -m src.main recommend --user user_001
+python3 -m src.main recommend --user user_001 --context "rainy night study"
 ```
 
 Target output:
 
-- recommended songs
-- recommended albums
-- short taste profile summary
+- deterministic taste profile summary from listening history
+- deterministic ranked song recommendations
+- deterministic ranked album recommendations
+- Gemini-generated playlist package explanations when the API is available
 
-Example interaction summary:
+Current example output summary:
 
-- The system aggregates the user's listening history into a taste profile.
-- It retrieves and ranks songs and albums that align with the user's dominant genres, moods, and energy patterns.
-- It summarizes the user's overall listening habits in a few sentences.
+- The system aggregates `user_001` listening history into genre, mood, tag, artist, language, and energy signals.
+- It ranks songs and albums locally using the scoring engine.
+- It builds playlist packages locally, then asks Gemini to write short explanations grounded in the retrieved history and ranked candidates.
+- When Gemini succeeds, the CLI prints `AI-generated section` and `source: gemini`; when Gemini fails, it prints `AI fallback section` with a fallback reason.
 
 ### Example 3: Yearly Wrapped
 Input:
@@ -357,7 +385,7 @@ Run the current test suite with:
 pytest
 ```
 
-At the moment, the repository includes starter tests for the base recommender and new tests for Feature 1. The remaining extended workflows are still being implemented, so their reliability checks are documented as a testing plan rather than completed results.
+The repository currently includes automated tests for the base recommender, Feature 1 similar-song search, and Feature 2 listening-history recommendation with playlist package fallback behavior. Remaining workflows will add tests as they are implemented.
 
 ## Testing Plan
 The expanded test plan should cover:
@@ -366,13 +394,15 @@ The expanded test plan should cover:
 - Gemini/rule-based intent parsing validation
 - similar-song ranking behavior
 - user taste aggregation from history
+- history-based song and album recommendation
+- playlist package validation and deterministic fallback behavior
 - monthly and yearly recap statistics
 - recap validation logic
 - sheet music matching behavior
 - edge cases for missing or ambiguous data
 
 ## Testing Summary
-The current test suite passes with `12 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, and intent-based profile adjustment. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
+The current test suite passes with `26 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, intent-based profile adjustment, listening-history aggregation, taste-profile construction, history-based recommendation, album ranking, playlist package generation, playlist output validation, deterministic playlist fallback behavior, and missing-user handling. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
 
 ## Design Decisions
 - The project keeps the original rule-based scoring engine because it is transparent, explainable, and easier to validate than a fully opaque recommendation model.
@@ -402,7 +432,7 @@ These observations motivate the move toward retrieval-driven workflows and stron
 - The current catalog is small and partially simulated.
 - Metadata quality strongly affects recommendation quality.
 - The current recommender is still metadata-based rather than audio-based.
-- Planned recap features depend on the quality of listening-history data.
+- Recap features are still planned and will depend on the quality of listening-history data.
 - Planned sheet music matching is based on metadata retrieval, not automatic transcription.
 
 ## Future Work

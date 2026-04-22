@@ -32,7 +32,7 @@ The expanded application design adds four higher-level workflows.
 The user searches for a song, and the system retrieves the seed song's metadata before ranking other songs with similar attributes. If the user provides a natural-language intent, Gemini can parse that request into structured ranking adjustments while the local scoring engine still decides the final order.
 
 ### 2. Habit-Based Recommendation
-The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits.
+The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits. This workflow is implemented with simulated listening-history data. It also groups ranked songs into playlist packages and can use Gemini to generate grounded package explanations from retrieved user-history and recommendation context. Gemini only writes explanations; local ranking and package construction decide the actual recommendations.
 
 ### 3. Monthly and Yearly Music Wrapped
 The system summarizes listening activity over time and generates a recap with top songs, top artists, top albums, and a taste summary.
@@ -72,8 +72,8 @@ The system retrieves structured context before producing outputs. For example:
 
 This grounding step is central to the system design.
 
-### Gemini Intent Parsing
-Gemini is used as a constrained parser for optional user intent in similar-song search. It converts requests such as "more energetic but still instrumental for studying" into structured fields that the recommender can validate and apply. Gemini does not directly select the final songs. If Gemini times out, fails, or returns invalid output, the system automatically uses a local rule-based fallback parser and reports the fallback source and short error detail.
+### Gemini Integration
+Gemini is used in two constrained ways. For similar-song search, it parses optional user intent into structured fields that the recommender can validate and apply. For habit-based recommendation, it writes short playlist package explanations from locally retrieved listening history, ranked songs, ranked albums, and optional context. Gemini does not directly select final songs or produce trusted song IDs. If Gemini times out, exceeds quota, fails, or returns unparseable output, the system automatically uses a deterministic fallback and reports the fallback source and short error detail. The CLI labels deterministic, AI-generated, and fallback sections so users can tell which parts used Gemini.
 
 ### Reliability and Validation
 The system includes planned validation and fallback behavior:
@@ -83,6 +83,7 @@ The system includes planned validation and fallback behavior:
 - logging captures retrieval and ranking steps
 - fallback summaries are used when data is insufficient
 - Gemini parser outputs are validated, clamped, and backed up by a local rule-based parser
+- Gemini playlist explanations are attached to deterministic package structures, so recommendation membership remains locally controlled
 
 These are the main advanced AI components of the project and they are integrated directly into the recommendation, recap, and matching workflows.
 
@@ -102,6 +103,7 @@ The system may return:
 - similar-song recommendations
 - parsed intent adjustments and confidence scores
 - personalized song and album recommendations
+- playlist packages with grounded explanations
 - monthly and yearly listening recaps
 - sheet music matches
 - explanation text grounded in retrieved metadata
@@ -111,13 +113,13 @@ The system separates three scoring concepts: search confidence measures seed-son
 ## Data Sources
 ### Current Data
 - [data/songs.csv](data/songs.csv)
+- [data/albums.csv](data/albums.csv)
+- [data/listening_history.csv](data/listening_history.csv)
 
 ### Planned Data
-- `data/albums.csv`
-- `data/listening_history.csv`
 - `data/sheet_music.csv`
 
-The current implementation is strongest on song-level recommendation because the repository already includes a song catalog. The remaining workflows depend on the planned datasets being added and validated.
+The current implementation supports song-level recommendation, similar-song search, and habit-based song and album recommendation. The remaining workflows depend on the planned datasets being added and validated.
 
 ## How the System Works
 ### Base Recommender
@@ -127,7 +129,7 @@ The system loads songs, compares each song to a structured user profile, compute
 The system retrieves a seed song from the catalog, reuses its features as a similarity profile, optionally adjusts that profile with parsed intent, and ranks other songs against the final profile.
 
 ### Habit-Based Recommendation
-The system will aggregate listening history into summary statistics such as top genres, top artists, top moods, and typical energy levels, then convert those signals into recommendation targets.
+The system aggregates listening history into summary statistics such as top genres, top artists, top moods, top tags, language preference, and typical energy levels, then converts those signals into recommendation targets for songs and albums. Ranked songs are grouped locally into playlist packages such as Core Taste Mix, Context Fit, and Discovery Stretch. Gemini receives a compact retrieved context and returns line-based package explanations, which are attached to the local package structure; deterministic fallback explanations are used if the AI call fails.
 
 ### Monthly and Yearly Wrapped
 The system will filter listening history by time period, compute top songs, artists, and albums, and generate a natural-language recap grounded in those statistics.
@@ -146,7 +148,7 @@ The system will retrieve matching sheet music resources based on song title, ins
 - The current repository uses a small and partially simulated music catalog.
 - Recommendation quality depends heavily on metadata quality.
 - The current scoring logic is metadata-based rather than audio-based.
-- The planned recap and sheet-music workflows require more datasets than are currently present.
+- The planned recap and sheet-music workflows require additional implementation and, for sheet music, an additional dataset.
 - Exact string matching can be too rigid for related moods or genres.
 
 ## Biases and Risks
@@ -195,20 +197,19 @@ The testing plan covers:
 - edge cases involving missing or ambiguous inputs
 
 ## Current Testing Status
-The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py) and similar-song search tests in [tests/test_search.py](tests/test_search.py). The current test suite passes with `12 passed`. Manual evaluation of the base system found:
+The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py), similar-song search tests in [tests/test_search.py](tests/test_search.py), listening-history recommendation tests in [tests/test_history.py](tests/test_history.py), and playlist package tests in [tests/test_playlist.py](tests/test_playlist.py). The current test suite passes with `26 passed`. Manual evaluation of the base system found:
 
 - strong performance when profile preferences align with the catalog
 - improved behavior after reducing genre dominance and increasing energy weight
 - better result variety when diversity penalties are enabled
 - visible failure cases for rare genres, exact-match rigidity, and sparse catalog coverage
 
-The expanded workflows are still under implementation and will require additional automated tests once the new datasets and modules are added.
+The recap and sheet-music workflows are still under implementation and will require additional automated tests once their modules are added.
 
 ## Planned Evaluation
 The next evaluation steps are:
 
-- unit tests for song search and seed-song retrieval
-- ranking checks for similar-song recommendation
+- additional ranking checks for more varied user histories
 - validation checks for monthly and yearly recap statistics
 - error-handling tests for missing song queries and missing sheet music
 - manual review of recommendation quality and recap accuracy

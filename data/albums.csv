@@ -1,0 +1,11 @@
+album_id,album_name,artist,genre,mood,avg_energy,language,release_decade,mood_tags
+101,Night Study Tapes,LoRoom,lofi,focused,0.39,instrumental,2020,dreamy|focused|nocturnal|minimal
+102,Rain Window Sessions,Paper Lanterns,lofi,chill,0.34,instrumental,2020,peaceful|dreamy|cozy
+103,Orbit Sketches,Orbit Bloom,ambient,chill,0.29,instrumental,2010,dreamy|reflective|ethereal
+104,City Pop Sparks,Neon Echo,pop,happy,0.79,english,2020,uplifting|carefree|bright
+105,Storm Voltage,Voltline,rock,intense,0.90,english,2010,aggressive|powerful|driving
+106,Cafe Letters,Slow Stereo,jazz,relaxed,0.38,english,2000,nostalgic|warm|intimate
+107,Midnight Highway,Neon Echo,synthwave,moody,0.74,instrumental,2010,nostalgic|nocturnal|cinematic
+108,Quiet Classics,Pale Ember,classical,melancholy,0.31,instrumental,1990,melancholic|haunting|intimate
+109,Kyoto Reflections,Sora,world,reflective,0.34,japanese,2000,reflective|ethereal|peaceful
+110,Golden Rooftops,Indigo Parade,indie pop,happy,0.75,english,2010,uplifting|carefree|nostalgic
