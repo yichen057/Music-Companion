@@ -7,7 +7,7 @@ Music Companion
 Music Companion is an AI-powered music application that extends a base content-based recommender into a broader system for recommendation, listening-history analysis, recap generation, and sheet music matching.
 
 ## Base Functionality
-The base system is a content-based music recommender implemented in [src/recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/src/recommender.py). Songs are represented by structured metadata, and users are represented by a taste profile. The system scores each song against the profile and returns the highest-ranked results.
+The base system is a content-based music recommender implemented in [src/recommender.py](src/recommender.py). Songs are represented by structured metadata, and users are represented by a taste profile. The system scores each song against the profile and returns the highest-ranked results.
 
 The current scoring system uses:
 
@@ -29,7 +29,7 @@ The base recommender also supports multiple scoring modes and an optional divers
 The expanded application design adds four higher-level workflows.
 
 ### 1. Similar Song Recommendation
-The user searches for a song, and the system retrieves the seed song's metadata before ranking other songs with similar attributes.
+The user searches for a song, and the system retrieves the seed song's metadata before ranking other songs with similar attributes. If the user provides a natural-language intent, Gemini can parse that request into structured ranking adjustments while the local scoring engine still decides the final order.
 
 ### 2. Habit-Based Recommendation
 The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits.
@@ -72,6 +72,9 @@ The system retrieves structured context before producing outputs. For example:
 
 This grounding step is central to the system design.
 
+### Gemini Intent Parsing
+Gemini is used as a constrained parser for optional user intent in similar-song search. It converts requests such as "more energetic but still instrumental for studying" into structured fields that the recommender can validate and apply. Gemini does not directly select the final songs. If Gemini times out, fails, or returns invalid output, the system automatically uses a local rule-based fallback parser and reports the fallback source and short error detail.
+
 ### Reliability and Validation
 The system includes planned validation and fallback behavior:
 
@@ -79,6 +82,7 @@ The system includes planned validation and fallback behavior:
 - missing or ambiguous inputs are handled safely
 - logging captures retrieval and ranking steps
 - fallback summaries are used when data is insufficient
+- Gemini parser outputs are validated, clamped, and backed up by a local rule-based parser
 
 These are the main advanced AI components of the project and they are integrated directly into the recommendation, recap, and matching workflows.
 
@@ -86,6 +90,7 @@ These are the main advanced AI components of the project and they are integrated
 The full application design accepts:
 
 - song title queries
+- optional natural-language intent text for similar-song search
 - user identifiers
 - listening history records
 - recap time windows such as month or year
@@ -95,14 +100,17 @@ The full application design accepts:
 The system may return:
 
 - similar-song recommendations
+- parsed intent adjustments and confidence scores
 - personalized song and album recommendations
 - monthly and yearly listening recaps
 - sheet music matches
 - explanation text grounded in retrieved metadata
 
+The system separates three scoring concepts: search confidence measures seed-song retrieval quality, intent confidence measures how strongly Gemini or the fallback parser understood the user's natural-language adjustment, and song score measures candidate-song fit against the final adjusted profile.
+
 ## Data Sources
 ### Current Data
-- [data/songs.csv](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/data/songs.csv)
+- [data/songs.csv](data/songs.csv)
 
 ### Planned Data
 - `data/albums.csv`
@@ -116,7 +124,7 @@ The current implementation is strongest on song-level recommendation because the
 The system loads songs, compares each song to a structured user profile, computes a weighted score, and returns the top-ranked results.
 
 ### Similar Song Recommendation
-The system will retrieve a seed song from the catalog, reuse its features as a similarity profile, and rank other songs against that seed.
+The system retrieves a seed song from the catalog, reuses its features as a similarity profile, optionally adjusts that profile with parsed intent, and ranks other songs against the final profile.
 
 ### Habit-Based Recommendation
 The system will aggregate listening history into summary statistics such as top genres, top artists, top moods, and typical energy levels, then convert those signals into recommendation targets.
@@ -167,11 +175,12 @@ Monthly or yearly recap text may oversimplify a user's listening identity if it 
 ## Guardrails
 The full project design includes:
 
-- input validation for CLI arguments and dataset fields
+- input validation for CLI arguments, Gemini outputs, and dataset fields
 - fallback responses for missing song or sheet music matches
 - recap validation against computed statistics
 - logging of retrieval, ranking, and validation decisions
 - safe handling of insufficient listening history
+- automatic local fallback when Gemini is unavailable, including reported fallback reasons such as HTTP or network errors
 
 ## Testing Strategy
 The testing plan covers:
@@ -186,7 +195,7 @@ The testing plan covers:
 - edge cases involving missing or ambiguous inputs
 
 ## Current Testing Status
-The current repository already includes tests for the base recommender in [tests/test_recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/tests/test_recommender.py). Manual evaluation of the base system found:
+The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py) and similar-song search tests in [tests/test_search.py](tests/test_search.py). The current test suite passes with `12 passed`. Manual evaluation of the base system found:
 
 - strong performance when profile preferences align with the catalog
 - improved behavior after reducing genre dominance and increasing energy weight

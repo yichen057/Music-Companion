@@ -8,7 +8,7 @@ Music Companion is an AI-powered music discovery and reflection app built on top
 3. Monthly and yearly listening recap generation
 4. Sheet music matching for light music, especially piano and guitar
 
-This project integrates Retrieval-Augmented Generation (RAG) and a reliability-focused validation layer into its main application logic.
+This project integrates Retrieval-Augmented Generation (RAG), Gemini-powered intent parsing, and a reliability-focused validation layer into its main application logic.
 
 Its main goal is to show how retrieval, ranking, summarization, and guardrails can work together inside one music application.
 
@@ -18,7 +18,7 @@ This project extends the original **Music Recommender Simulation** from Modules 
 ## Base Functionality
 The base project is a content-based music recommender simulation. Each song in the catalog is represented with structured metadata such as genre, mood, energy, acousticness, instrumentalness, popularity, decade, language, duration, and mood tags. A user profile stores preferences over those features, and the system assigns a score to each song based on how closely the song matches the profile.
 
-The current scoring engine in [src/recommender.py](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/src/recommender.py) includes:
+The current scoring engine in [src/recommender.py](src/recommender.py) includes:
 
 - weighted feature matching
 - multiple scoring modes
@@ -31,12 +31,13 @@ This base logic remains the ranking backbone of the app.
 The extended project adds four AI-related workflows on top of the scoring engine.
 
 ### 1. Similar Song Recommendation
-The user searches for a song, and the system retrieves the seed song's metadata before finding other songs with similar attributes such as genre, mood, energy, decade, language, and tags.
+The user searches for a song, and the system retrieves the seed song's metadata before finding other songs with similar attributes such as genre, mood, energy, decade, language, and tags. The user can also provide a natural-language intent, such as "more energetic but still instrumental for studying." When a `GEMINI_API_KEY` is available, Gemini parses that intent into structured ranking adjustments; otherwise, the app falls back to a local rule-based parser. If Gemini times out or returns an invalid response, the fallback happens automatically and the CLI displays the fallback source.
 
-Planned CLI:
+Implemented CLI:
 
 ```bash
-python -m src.main similar --song "Song Title"
+python3 -m src.main similar --song "Song Title"
+python3 -m src.main similar --song "Library Rain" --intent "more energetic but still instrumental for studying"
 ```
 
 ### 2. Habit-Based Recommendation
@@ -45,7 +46,7 @@ The system analyzes a user's listening history, builds a taste profile, and reco
 Planned CLI:
 
 ```bash
-python -m src.main recommend --user user_001
+python3 -m src.main recommend --user user_001
 ```
 
 ### 3. Monthly and Yearly Music Wrapped
@@ -54,7 +55,7 @@ The system aggregates a user's listening history by month or year and generates 
 Planned CLI:
 
 ```bash
-python -m src.main wrapped --user user_001 --period year --year 2026
+python3 -m src.main wrapped --user user_001 --period year --year 2026
 ```
 
 ### 4. Sheet Music Matching
@@ -63,7 +64,7 @@ The system finds sheet music entries that best match a requested song, instrumen
 Planned CLI:
 
 ```bash
-python -m src.main sheet --song "River Flows in You" --instrument piano
+python3 -m src.main sheet --song "River Flows in You" --instrument piano
 ```
 
 ## AI Integration
@@ -79,6 +80,9 @@ Before the system generates recommendations, summaries, or explanations, it firs
 
 The generated output is therefore grounded in retrieved data rather than produced from an empty prompt.
 
+### Gemini Intent Parsing
+For similar-song search, Gemini is used as a constrained intent parser. It does not directly choose songs. Instead, it converts natural-language requests into structured fields such as `energy_delta`, `preferred_mood`, `required_language`, and `preferred_tags`. The deterministic scoring engine then uses those fields to rank songs, which keeps the final recommendation explainable and testable.
+
 ### Reliability and Validation
 The project also includes a reliability layer:
 
@@ -86,6 +90,8 @@ The project also includes a reliability layer:
 - missing or ambiguous queries trigger fallback behavior
 - invalid inputs are handled safely
 - retrieval and ranking steps are logged for debugging
+- Gemini outputs are validated and clamped before they affect ranking
+- a local rule-based parser is used when Gemini is unavailable
 
 These guardrails are part of the application logic and are intended to reduce unsupported or misleading outputs.
 
@@ -101,7 +107,8 @@ flowchart TD
     B --> F[Sheet Music Matching]
 
     C --> G[Retrieve Seed Song Metadata]
-    G --> H[Rank Similar Songs]
+    G --> V[Parse Optional Intent]
+    V --> H[Rank Similar Songs]
     H --> I[Generate Explanation]
 
     D --> J[Aggregate Listening History]
@@ -141,7 +148,7 @@ requirements.txt
 
 ## Data
 ### Current Dataset
-The repository currently includes [data/songs.csv](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/music-recommender-ai-lab/data/songs.csv), which stores the music catalog used by the base recommender.
+The repository currently includes [data/songs.csv](data/songs.csv), which stores the music catalog used by the base recommender.
 
 ### Planned Datasets
 The full application design also expects:
@@ -155,7 +162,7 @@ These datasets will support features 2 to 4.
 ## Setup
 ### 1. Create a virtual environment
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -164,37 +171,72 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Run the current base application
+### 3. Optional: configure Gemini
+Gemini intent parsing is optional. If no API key is configured, the app uses a local fallback parser. If Gemini is configured but times out or fails, the app automatically uses the fallback parser and reports the fallback reason.
+
 ```bash
-python -m src.main
+export GEMINI_API_KEY="your-api-key"
+```
+
+The default Gemini model is `gemini-2.5-flash`. You can override it if needed:
+
+```bash
+export GEMINI_MODEL="gemini-2.0-flash"
+```
+
+Do not commit API keys to the repository. Local `.env` files are ignored by git.
+
+### 4. Run the current base application
+```bash
+python3 -m src.main
 ```
 
 ## How to Run
-### Current Working Flow
+### Current Working Flows
 The repository currently supports the base recommender demo through:
 
 ```bash
-python -m src.main
+python3 -m src.main
 ```
 
-### Planned Extended Commands
-These commands represent the target interface for the expanded app:
+It also supports Feature 1, similar-song recommendation:
 
 ```bash
-python -m src.main similar --song "Song Title"
-python -m src.main recommend --user user_001
-python -m src.main wrapped --user user_001 --period month --month 2026-04
-python -m src.main wrapped --user user_001 --period year --year 2026
-python -m src.main sheet --song "Song Title" --instrument piano
+python3 -m src.main similar --song "Library Rain"
+python3 -m src.main similar --song "Library Rain" --intent "more energetic but still instrumental for studying"
+python3 -m src.main similar --song "Library Rain" --intent "more energetic but still instrumental for studying" --no-gemini
+```
+
+### CLI Flags and Confidence Scores
+The `--k` flag controls how many recommendations are returned. For example, `--k 3` returns the top three similar songs; it does not control whether Gemini is called.
+
+Gemini is only used when the user provides `--intent` and a `GEMINI_API_KEY` is available. If `--no-gemini` is provided, the app always uses the local rule-based parser.
+
+The CLI reports three different scoring concepts:
+
+- **Search confidence:** how confidently the system matched the user's song query to a seed song.
+- **Intent confidence:** how confidently Gemini or the fallback parser understood the natural-language intent.
+- **Song score:** how well each recommended song matches the final adjusted profile.
+
+For common requests, the local rule-based fallback often agrees with Gemini. For more nuanced language, Gemini provides more flexible intent extraction, while the fallback keeps the app reliable if the API fails. If Gemini fails, the app reports a fallback reason such as `HTTPError_403`, `HTTPError_429`, or `URLError`.
+
+### Planned Extended Commands
+These commands represent the target interface for the remaining expanded workflows:
+
+```bash
+python3 -m src.main recommend --user user_001
+python3 -m src.main wrapped --user user_001 --period month --month 2026-04
+python3 -m src.main wrapped --user user_001 --period year --year 2026
+python3 -m src.main sheet --song "Song Title" --instrument piano
 ```
 
 ## Example Workflows
-The following workflows describe the intended command-line interface for the expanded app. The current repository fully supports the base recommender flow, and the extended workflows will be added incrementally.
+The following workflows describe the command-line interface for the expanded app. Similar-song search is implemented; the remaining workflows will be added incrementally.
 ### Example 1: Similar Song Search
 Input:
 
 ```bash
-python -m src.main similar --song "Yellow"
+python3 -m src.main similar --song "Yellow"
 ```
 
 Target output:
@@ -202,6 +244,14 @@ Target output:
 - retrieved seed song
 - top similar songs
 - explanation of shared features
+
+Current example output summary:
+
+- Query: `Library Rain`
+- Matched seed song: `Library Rain` by `Paper Lanterns`
+- Search confidence: `1.00`
+- Top similar results include `Midnight Coding`, `Focus Flow`, and `Spacewalk Thoughts`
+- With intent `more energetic but still instrumental for studying`, the parser increases target energy, keeps instrumental preference, adds a focused tag, and moves `Focus Flow` to the top result.
 
 Example interaction summary:
 
@@ -213,7 +263,7 @@ Example interaction summary:
 Input:
 
 ```bash
-python -m src.main recommend --user user_001
+python3 -m src.main recommend --user user_001
 ```
 
 Target output:
@@ -232,7 +282,7 @@ Example interaction summary:
 Input:
 
 ```bash
-python -m src.main wrapped --user user_001 --period year --year 2026
+python3 -m src.main wrapped --user user_001 --period year --year 2026
 ```
 
 Target output:
@@ -252,7 +302,7 @@ Example interaction summary:
 Input:
 
 ```bash
-python -m src.main sheet --song "River Flows in You" --instrument piano
+python3 -m src.main sheet --song "River Flows in You" --instrument piano
 ```
 
 Target output:
@@ -307,12 +357,13 @@ Run the current test suite with:
 pytest
 ```
 
-At the moment, the repository includes starter tests for the base recommender. The extended workflows described above are still being implemented, so their reliability checks are documented as a testing plan rather than completed results.
+At the moment, the repository includes starter tests for the base recommender and new tests for Feature 1. The remaining extended workflows are still being implemented, so their reliability checks are documented as a testing plan rather than completed results.
 
 ## Testing Plan
 The expanded test plan should cover:
 
 - seed-song retrieval correctness
+- Gemini/rule-based intent parsing validation
 - similar-song ranking behavior
 - user taste aggregation from history
 - monthly and yearly recap statistics
@@ -321,7 +372,7 @@ The expanded test plan should cover:
 - edge cases for missing or ambiguous data
 
 ## Testing Summary
-The project currently includes starter tests for the base recommender and a written testing plan for the expanded workflows. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the new workflows will be added after implementation and verification.
+The current test suite passes with `12 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, and intent-based profile adjustment. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
 
 ## Design Decisions
 - The project keeps the original rule-based scoring engine because it is transparent, explainable, and easier to validate than a fully opaque recommendation model.
@@ -362,4 +413,4 @@ These observations motivate the move toward retrieval-driven workflows and stron
 - richer album and playlist recommendation
 
 ## Reflection
-Building Music Companion reinforced that useful AI systems depend on more than generation alone. Retrieval, ranking, validation, and fallback behavior all matter if the system is expected to produce outputs that are understandable and trustworthy. This project also highlighted a practical trade-off: explainable systems are easier to debug and document, but they still depend heavily on the quality and coverage of the underlying data. For a deeper discussion of biases, risks, testing, and human-AI collaboration, see [model_card.md](/Users/yichen/Downloads/School/算法课/CodePath/AI110/Week8/Music-Companion/model_card.md).
+Building Music Companion reinforced that useful AI systems depend on more than generation alone. Retrieval, ranking, validation, and fallback behavior all matter if the system is expected to produce outputs that are understandable and trustworthy. This project also highlighted a practical trade-off: explainable systems are easier to debug and document, but they still depend heavily on the quality and coverage of the underlying data. For a deeper discussion of biases, risks, testing, and human-AI collaboration, see [model_card.md](model_card.md).
