@@ -126,6 +126,18 @@ The final Feature 2 design changed the boundary between AI and deterministic cod
 
 This final design is more reliable because the AI output is no longer trusted as application state. Gemini contributes useful language, but local code preserves recommendation correctness.
 
+
+
+## Feature 3 Ranking Caps
+For the wrapped recap feature, I decided to show capped rankings instead of dumping every listening-history record. The system reports up to 10 songs and up to 5 artists, albums, genres, moods, and tags. This keeps the recap readable and closer to real music-summary products, while still being grounded in deterministic counts.
+
+The current sample output may show fewer than the cap because the demo dataset is small. For example, if a user only has 8 valid songs in the selected period, the recap shows 8 songs rather than padding or inventing extra entries. This is another guardrail: the app summarizes available data but does not fabricate missing listening history.
+
+## API Key Handling
+During implementation, I also changed the local Gemini setup from manually exporting the API key in every terminal session to loading it from a local `.env` file. This made the app easier to run reproducibly because a developer can open a new terminal and run the CLI without retyping the key.
+
+The important guardrail is that `.env` is listed in `.gitignore`, so secrets stay local and are not staged by normal `git add .` usage. This is a small but important engineering detail: AI integrations often depend on external credentials, and the setup should be convenient without encouraging hardcoded or committed API keys.
+
 ## Final Result
 Feature 1 now successfully supports Gemini-powered intent parsing with automatic fallback. Feature 2 now successfully supports Gemini-generated playlist explanations grounded in retrieved listening history and ranked candidates. The successful Feature 2 output is labeled in the CLI as:
 

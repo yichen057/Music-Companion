@@ -24,6 +24,7 @@ from src.history import (
 from src.playlist import generate_playlist_packages
 from src.recommender import load_songs, recommend_songs, max_score
 from src.search import explain_intent_adjustment, recommend_similar_songs
+from src.wrapped import build_wrapped_report
 
 
 def format_reasons(explanation: str) -> str:
@@ -135,6 +136,57 @@ def print_playlist_packages(packages: dict, songs: list) -> None:
             if song_id in song_by_id
         ]
         print("Songs: " + ", ".join(titles))
+
+
+def print_wrapped_report(report: dict) -> None:
+    """Print monthly or yearly listening recap."""
+    stats = report["stats"]
+    summary = report["summary"]
+    print(f"\nMusic Wrapped: {stats['period_label']}")
+    print(f"- User: {stats['user_id']}")
+    print(f"- Events analyzed: {stats['event_count']}")
+    print(f"- Weighted plays: {stats['total_weighted_plays']}")
+    print(f"- Average energy: {stats['average_energy']:.2f}")
+
+    print("\nTaste Summary")
+    if summary["source"] == "gemini":
+        print("AI-generated section: Gemini summarized retrieved listening statistics.")
+    elif summary["source"] == "fallback_deterministic":
+        print("AI fallback section: Gemini was unavailable, so deterministic recap text was used.")
+    else:
+        print("Deterministic section: generated directly from computed recap statistics.")
+    print(f"- source: {summary['source']}")
+    if summary.get("fallback_reason"):
+        print(f"- fallback_reason: {summary['fallback_reason']}")
+    if summary.get("fallback_detail"):
+        print(f"- fallback_detail: {summary['fallback_detail']}")
+    print(summary["summary"])
+
+    song_rows = [
+        [rank, item["title"], item["artist"], item["weighted_plays"]]
+        for rank, item in enumerate(stats["top_songs"], 1)
+    ]
+    print("\nTop Songs")
+    print(tabulate(song_rows, headers=["Rank", "Title", "Artist", "Weighted Plays"], tablefmt="grid"))
+
+    print("\nTop Artists")
+    artist_rows = [[rank, artist, plays] for rank, (artist, plays) in enumerate(stats["top_artists"], 1)]
+    print(tabulate(artist_rows, headers=["Rank", "Artist", "Weighted Plays"], tablefmt="grid"))
+
+    print("\nTop Albums")
+    album_rows = [
+        [rank, item["album_name"], item["artist"], item["weighted_plays"]]
+        for rank, item in enumerate(stats["top_albums"], 1)
+    ]
+    if album_rows:
+        print(tabulate(album_rows, headers=["Rank", "Album", "Artist", "Weighted Plays"], tablefmt="grid"))
+    else:
+        print("No album matches could be inferred from the current metadata.")
+
+    print("\nTaste Signals")
+    print(f"- Top genres: {', '.join(name for name, _ in stats['top_genres'][:3])}")
+    print(f"- Top moods: {', '.join(name for name, _ in stats['top_moods'][:3])}")
+    print(f"- Top tags: {', '.join(name for name, _ in stats['top_tags'][:5])}")
 
 
 def print_seed_song(seed_song: dict, confidence: float) -> None:
@@ -355,6 +407,37 @@ def run_history_recommendation(
     return 0
 
 
+def run_wrapped_recap(
+    user_id: str,
+    period: str,
+    year: int,
+    month: int | None,
+    use_gemini: bool,
+) -> int:
+    """Run Feature 3: monthly or yearly listening recap."""
+    songs = load_songs("data/songs.csv")
+    albums = load_albums("data/albums.csv")
+    history = load_listening_history("data/listening_history.csv")
+
+    try:
+        report = build_wrapped_report(
+            user_id,
+            history,
+            songs,
+            albums,
+            period=period,
+            year=year,
+            month=month,
+            use_gemini=use_gemini,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    print_wrapped_report(report)
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -432,12 +515,45 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Use deterministic playlist explanations instead of Gemini.",
     )
 
+    wrapped_parser = subparsers.add_parser(
+        "wrapped",
+        help="Generate a monthly or yearly listening recap from user history.",
+    )
+    wrapped_parser.add_argument(
+        "--user",
+        required=True,
+        help="User ID from data/listening_history.csv.",
+    )
+    wrapped_parser.add_argument(
+        "--period",
+        required=True,
+        choices=["month", "year"],
+        help="Recap period to generate.",
+    )
+    wrapped_parser.add_argument(
+        "--year",
+        type=int,
+        required=True,
+        help="Four-digit year for the recap.",
+    )
+    wrapped_parser.add_argument(
+        "--month",
+        type=int,
+        default=None,
+        help="Month number for monthly recaps, from 1 to 12.",
+    )
+    wrapped_parser.add_argument(
+        "--no-gemini",
+        action="store_true",
+        help="Use deterministic recap text instead of Gemini.",
+    )
+
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the base demo or a selected Music Companion workflow."""
-    load_dotenv()
+    load_dotenv(override=True)
     if argv is None:
         argv = sys.argv[1:]
 
@@ -461,6 +577,20 @@ def main(argv: list[str] | None = None) -> int:
             args.albums_k,
             args.mode,
             args.context,
+            use_gemini=not args.no_gemini,
+        )
+    if args.command == "wrapped":
+        if args.period == "month" and args.month is None:
+            print("Error: --month is required when --period month.")
+            return 1
+        if args.month is not None and not 1 <= args.month <= 12:
+            print("Error: --month must be between 1 and 12.")
+            return 1
+        return run_wrapped_recap(
+            args.user,
+            args.period,
+            args.year,
+            args.month,
             use_gemini=not args.no_gemini,
         )
 

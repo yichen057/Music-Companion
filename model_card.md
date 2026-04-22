@@ -35,7 +35,7 @@ The user searches for a song, and the system retrieves the seed song's metadata 
 The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits. This workflow is implemented with simulated listening-history data. It also groups ranked songs into playlist packages and can use Gemini to generate grounded package explanations from retrieved user-history and recommendation context. Gemini only writes explanations; local ranking and package construction decide the actual recommendations.
 
 ### 3. Monthly and Yearly Music Wrapped
-The system summarizes listening activity over time and generates a recap with top songs, top artists, top albums, and a taste summary.
+The system summarizes listening activity over time and generates a recap with capped deterministic rankings: up to 10 top songs, 5 top artists, 5 inferred top albums, 5 top genres, 5 top moods, 5 top tags, average energy, and a taste summary. This workflow is implemented for monthly and yearly periods. Gemini is optional and only rewrites the computed recap statistics into a short narrative summary.
 
 ### 4. Sheet Music Matching
 The system retrieves sheet music resources that best match a requested song, instrument, and difficulty level, especially for piano and guitar.
@@ -73,7 +73,7 @@ The system retrieves structured context before producing outputs. For example:
 This grounding step is central to the system design.
 
 ### Gemini Integration
-Gemini is used in two constrained ways. For similar-song search, it parses optional user intent into structured fields that the recommender can validate and apply. For habit-based recommendation, it writes short playlist package explanations from locally retrieved listening history, ranked songs, ranked albums, and optional context. Gemini does not directly select final songs or produce trusted song IDs. If Gemini times out, exceeds quota, fails, or returns unparseable output, the system automatically uses a deterministic fallback and reports the fallback source and short error detail. The CLI labels deterministic, AI-generated, and fallback sections so users can tell which parts used Gemini.
+Gemini is used in two constrained ways. For similar-song search, it parses optional user intent into structured fields that the recommender can validate and apply. For habit-based recommendation, it writes short playlist package explanations from locally retrieved listening history, ranked songs, ranked albums, and optional context. For wrapped recaps, it can rewrite computed listening-history statistics into a concise narrative summary. Gemini does not directly select final songs, produce trusted song IDs, or compute ranking statistics. If Gemini times out, exceeds quota, fails, or returns unparseable output, the system automatically uses a deterministic fallback and reports the fallback source and short error detail. The CLI labels deterministic, AI-generated, and fallback sections so users can tell which parts used Gemini.
 
 ### Reliability and Validation
 The system includes planned validation and fallback behavior:
@@ -132,7 +132,7 @@ The system retrieves a seed song from the catalog, reuses its features as a simi
 The system aggregates listening history into summary statistics such as top genres, top artists, top moods, top tags, language preference, and typical energy levels, then converts those signals into recommendation targets for songs and albums. Ranked songs are grouped locally into playlist packages such as Core Taste Mix, Context Fit, and Discovery Stretch. Gemini receives a compact retrieved context and returns line-based package explanations, which are attached to the local package structure; deterministic fallback explanations are used if the AI call fails.
 
 ### Monthly and Yearly Wrapped
-The system will filter listening history by time period, compute top songs, artists, and albums, and generate a natural-language recap grounded in those statistics.
+The system filters listening history by time period, computes capped rankings for songs, artists, inferred albums, genres, moods, and tags, then generates a recap grounded in those statistics. The caps are intentional: top songs are limited to 10, and artist/album/genre/mood/tag lists are limited to 5. Gemini is optional and only rewrites the narrative summary; deterministic fallback text is used when AI is unavailable.
 
 ### Sheet Music Matching
 The system will retrieve matching sheet music resources based on song title, instrument, and optionally difficulty, then rank the best available options.
@@ -148,7 +148,8 @@ The system will retrieve matching sheet music resources based on song title, ins
 - The current repository uses a small and partially simulated music catalog.
 - Recommendation quality depends heavily on metadata quality.
 - The current scoring logic is metadata-based rather than audio-based.
-- The planned recap and sheet-music workflows require additional implementation and, for sheet music, an additional dataset.
+- The sheet-music workflow requires additional implementation and an additional dataset.
+- Top albums are inferred from current song and album metadata because the song catalog does not yet include album IDs.
 - Exact string matching can be too rigid for related moods or genres.
 
 ## Biases and Risks
@@ -197,14 +198,14 @@ The testing plan covers:
 - edge cases involving missing or ambiguous inputs
 
 ## Current Testing Status
-The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py), similar-song search tests in [tests/test_search.py](tests/test_search.py), listening-history recommendation tests in [tests/test_history.py](tests/test_history.py), and playlist package tests in [tests/test_playlist.py](tests/test_playlist.py). The current test suite passes with `26 passed`. Manual evaluation of the base system found:
+The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py), similar-song search tests in [tests/test_search.py](tests/test_search.py), listening-history recommendation tests in [tests/test_history.py](tests/test_history.py), and playlist package tests in [tests/test_playlist.py](tests/test_playlist.py). The current test suite passes with `32 passed`. Manual evaluation of the base system found:
 
 - strong performance when profile preferences align with the catalog
 - improved behavior after reducing genre dominance and increasing energy weight
 - better result variety when diversity penalties are enabled
 - visible failure cases for rare genres, exact-match rigidity, and sparse catalog coverage
 
-The recap and sheet-music workflows are still under implementation and will require additional automated tests once their modules are added.
+The sheet-music workflow is still under implementation and will require additional automated tests once its module and dataset are added.
 
 ## Planned Evaluation
 The next evaluation steps are:

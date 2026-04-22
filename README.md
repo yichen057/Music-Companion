@@ -53,12 +53,13 @@ python3 -m src.main recommend --user user_001 --context "rainy night study"
 ```
 
 ### 3. Monthly and Yearly Music Wrapped
-The system aggregates a user's listening history by month or year and generates a recap with top songs, top artists, top albums, and a natural-language taste summary.
+The system aggregates a user's listening history by month or year and generates a recap with capped rankings: up to 10 top songs, 5 top artists, 5 inferred top albums, 5 top genres, 5 top moods, and 5 top tags. These rankings and taste statistics are deterministic because they come directly from listening-history aggregation. Gemini is optional and only used as a narrative layer that rewrites the computed statistics into a more natural recap summary; if Gemini is unavailable, the app uses a deterministic summary and reports the fallback reason.
 
-Planned CLI:
+Implemented CLI:
 
 ```bash
 python3 -m src.main wrapped --user user_001 --period year --year 2026
+python3 -m src.main wrapped --user user_001 --period month --year 2026 --month 4
 ```
 
 ### 4. Sheet Music Matching
@@ -88,10 +89,12 @@ For similar-song search, Gemini is used as a constrained intent parser. It does 
 
 For habit-based recommendation, Gemini is used as a grounded playlist explainer. The local system first aggregates listening history, ranks songs and albums, and builds playlist packages. Gemini then receives a compact retrieved context and writes only the `why_it_fits` explanation for each package. It does not choose songs, invent IDs, or change package membership.
 
+For monthly and yearly wrapped recaps, the core work is deterministic statistics, not AI generation. The local system computes top songs, top artists, inferred top albums, genres, moods, tags, and average energy from listening history. Gemini is optional and only writes a short narrative summary from those computed statistics, while deterministic fallback text remains available if the AI call fails.
+
 ### Reliability and Validation
 The project also includes a reliability layer:
 
-- recap outputs are checked against computed statistics
+- recap outputs are grounded in computed listening-history statistics
 - missing or ambiguous queries trigger fallback behavior
 - invalid inputs are handled safely
 - retrieval and ranking steps are logged for debugging
@@ -197,13 +200,13 @@ Add your Gemini API key to `.env`:
 GEMINI_API_KEY=your-api-key
 ```
 
-The app loads `.env` automatically through `python-dotenv`, so you do not need to export the key every time. The default Gemini model is `gemini-2.5-flash`. You can override it in `.env` if needed:
+The app loads `.env` automatically through `python-dotenv`, so you do not need to export the key every time you open a new terminal. This keeps local development convenient while avoiding hardcoded secrets in the source code. The default Gemini model is `gemini-2.5-flash`. You can override it in `.env` if needed:
 
 ```bash
 GEMINI_MODEL=gemini-2.0-flash
 ```
 
-Do not commit API keys to the repository. Local `.env` files are ignored by git.
+Do not commit API keys to the repository. Local `.env` files are ignored by git, so `git add .` will not stage your Gemini key unless you force-add `.env` manually.
 
 ### 4. Run the current base application
 ```bash
@@ -234,6 +237,14 @@ python3 -m src.main recommend --user user_001 --k 3 --albums-k 2
 python3 -m src.main recommend --user user_001 --context "rainy night study" --no-gemini
 ```
 
+It also supports Feature 3, monthly and yearly listening wrapped recaps:
+
+```bash
+python3 -m src.main wrapped --user user_001 --period year --year 2026
+python3 -m src.main wrapped --user user_001 --period month --year 2026 --month 4
+python3 -m src.main wrapped --user user_001 --period year --year 2026 --no-gemini
+```
+
 ### CLI Flags and Confidence Scores
 The `--k` flag controls how many recommendations are returned. For example, `--k 3` returns the top three similar songs; it does not control whether Gemini is called.
 
@@ -248,16 +259,14 @@ The CLI reports three different scoring concepts:
 For common requests, the local rule-based fallback often agrees with Gemini. For more nuanced language, Gemini provides more flexible intent extraction, while the fallback keeps the app reliable if the API fails. If Gemini fails, the app reports a fallback reason such as `HTTPError_403`, `HTTPError_429`, or `URLError`.
 
 ### Planned Extended Commands
-These commands represent the target interface for the remaining expanded workflows:
+This command represents the target interface for the remaining expanded workflow:
 
 ```bash
-python3 -m src.main wrapped --user user_001 --period month --month 2026-04
-python3 -m src.main wrapped --user user_001 --period year --year 2026
 python3 -m src.main sheet --song "Song Title" --instrument piano
 ```
 
 ## Example Workflows
-The following workflows describe the command-line interface for the expanded app. Similar-song search and habit-based recommendation are implemented; the remaining workflows will be added incrementally.
+The following workflows describe the command-line interface for the expanded app. Similar-song search, habit-based recommendation, and wrapped recaps are implemented; sheet music matching will be added next.
 ### Example 1: Similar Song Search
 Input:
 
@@ -313,18 +322,19 @@ Input:
 python3 -m src.main wrapped --user user_001 --period year --year 2026
 ```
 
-Target output:
+Current output:
 
-- top 10 songs
-- top artists
-- top albums
-- yearly taste summary
+- up to 10 top songs by weighted plays
+- up to 5 top artists
+- up to 5 inferred top albums from available album metadata
+- up to 5 top genres, moods, tags, plus average energy
+- deterministic taste summary, optionally rewritten by Gemini from the computed stats
 
-Example interaction summary:
+Current example output summary:
 
-- The system filters listening history by the requested time period.
-- It computes the user's most-played songs, artists, and albums for that period.
-- It generates a concise taste summary grounded in those statistics.
+- The system filters `user_001` listening history to 2026.
+- It computes capped rankings instead of dumping the full listening log; for the current sample data, `Focus Flow` is the top song, `LoRoom` is the top artist, and `Night Study Tapes` is the top inferred album.
+- It summarizes the user's taste as lofi/chill/focused with low average energy.
 
 ### Example 4: Sheet Music Matching
 Input:
@@ -402,7 +412,7 @@ The expanded test plan should cover:
 - edge cases for missing or ambiguous data
 
 ## Testing Summary
-The current test suite passes with `26 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, intent-based profile adjustment, listening-history aggregation, taste-profile construction, history-based recommendation, album ranking, playlist package generation, playlist output validation, deterministic playlist fallback behavior, and missing-user handling. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
+The current test suite passes with `32 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, intent-based profile adjustment, listening-history aggregation, taste-profile construction, history-based recommendation, album ranking, playlist package generation, playlist output validation, deterministic playlist fallback behavior, wrapped recap period filtering, top song/artist/album statistics, deterministic recap fallback behavior, and missing-user handling. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
 
 ## Design Decisions
 - The project keeps the original rule-based scoring engine because it is transparent, explainable, and easier to validate than a fully opaque recommendation model.
