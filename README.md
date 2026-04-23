@@ -116,7 +116,7 @@ This project addresses two optional stretch features:
 The system also uses multi-step workflows such as retrieve -> rank -> explain -> validate -> fallback, but it does not claim full agentic autonomy or fine-tuning.
 
 ## System Architecture
-The system architecture diagram is stored in the `assets/` folder and can be embedded here as an image or represented as a Mermaid diagram.
+The system architecture diagram is embedded below as a Mermaid diagram. Demo screenshots are stored in the `assets/` folder.
 
 ```mermaid
 flowchart TD
@@ -127,28 +127,31 @@ flowchart TD
     B --> F[Sheet Music Matching]
 
     C --> G[Retrieve Seed Song Metadata]
-    G --> V[Parse Optional Intent]
-    V --> H[Rank Similar Songs]
-    H --> I[Generate Explanation]
+    G --> V[Optional Gemini Intent Parser]
+    V --> V2[Validate or Fallback to Rule Parser]
+    V2 --> H[Rank Similar Songs Locally]
+    H --> I[Generate Score Breakdown]
 
     D --> J[Aggregate Listening History]
     J --> K[Build Taste Profile]
-    K --> L[Recommend Songs and Albums]
+    K --> L[Rank Songs and Albums Locally]
     L --> W[Build Playlist Packages]
-    W --> X[Gemini Writes Package Explanations]
-    X --> Y[Validate and Attach Explanations]
+    W --> X[Optional Gemini Package Explanations]
+    X --> Y[Validate or Fallback to Deterministic Text]
     Y --> R
 
     E --> M[Aggregate Time-Bounded Stats]
-    M --> N[Generate Recap Summary]
-    N --> O[Validate Summary Against Stats]
+    M --> N[Optional Gemini Recap Narrative]
+    N --> O[Validate or Fallback to Deterministic Summary]
 
     F --> P[Retrieve Matching Sheet Music]
-    P --> Q[Rank by Instrument and Difficulty]
+    P --> Q[Rank by Instrument and Difficulty Locally]
+    Q --> Z[Optional Gemini Top-Match Explanation]
+    Z --> Z2[Validate or Fallback to Deterministic Text]
 
     I --> R[CLI Output]
     O --> R
-    Q --> R
+    Z2 --> R
 
     R --> S[Logging and Guardrails]
     R --> T[Validation and Tests]
@@ -364,17 +367,107 @@ Current example output summary:
 - The explanation references the retrieved arrangement metadata instead of inventing external links or unavailable scores.
 
 ## Demo Walkthrough
-Add one of the following before submission:
+The screenshots below show the system running end-to-end across the implemented workflows.
 
-- a Loom link showing the system end to end with at least 2 to 3 example inputs
-- or a walkthrough using screenshots or GIFs stored in `assets/`
+### 1. Similar Song Search
 
-Suggested demo files:
+Commands shown:
 
-- `assets/demo-similar.png`
-- `assets/demo-recommend.png`
-- `assets/demo-wrapped.png`
-- `assets/demo-sheet.png`
+```bash
+python3 -m src.main similar --song "Library Rain" --intent "same cozy rainy-night feeling but less sleepy" --k 3
+
+python3 -m src.main similar --song "Library Rain" --intent "same cozy rainy-night feeling but less sleepy" --no-gemini --k 3
+```
+
+What it shows:
+
+- Retrieves `Library Rain` by `Paper Lanterns` as the seed song and reports `Search confidence: 1.00`.
+- Uses `--k 3` to limit the output to the top 3 recommendations, making the comparison easier to read in the demo.
+- Uses Gemini in the first run to parse the natural-language intent into structured signals: `energy_delta: +0.15`, `preferred_mood: chill`, and `preferred_tags: cozy, rainy-night`.
+- Uses the local rule-based parser in the second run because `--no-gemini` is enabled; the fallback parser produces its own structured signals, including `energy_delta: -0.20` and tags such as `nocturnal` and `cozy`.
+- Shows that Gemini and the fallback parser can interpret the same request differently, especially for nuanced language like “less sleepy.”
+- Keeps final recommendation ranking deterministic: both runs use the local scoring engine to rank songs and print score breakdowns.
+
+![Similar song search demo](assets/image-20260422175554427.png)
+
+### 2. Listening-History Recommendation
+
+Commands shown:
+
+```bash
+python3 -m src.main recommend --user user_001
+
+python3 -m src.main recommend --user user_001 --context "rainy night study"
+```
+
+What it shows:
+
+- Aggregates `user_001` listening history into a taste profile, including favorite genre, mood, average energy, preferred language, and top mood tags.
+- Generates a deterministic taste summary from listening-history statistics, such as the user's lofi/chill preference and frequently played artists.
+- Ranks recommended songs locally using the scoring engine; the table shows each song's score and feature-level breakdown.
+- Ranks recommended albums locally from `data/albums.csv`, using the same taste profile derived from the user's listening history.
+- Builds playlist packages such as `Core Taste Mix`, `Context Fit`, and `Discovery Stretch` from the locally ranked songs.
+- Uses Gemini only after retrieval and ranking are complete to write package explanations from the retrieved history and ranked candidates.
+- Shows successful AI integration through `AI-generated section` and `source: gemini`, while the actual song and album recommendations remain deterministic.
+- In the second screenshot, the `--context "rainy night study"` input gives the system temporary context for this recommendation session, so the playlist package explanation can reflect the current listening situation without replacing the user's long-term taste profile.
+
+![Listening-history recommendation demo, part 1](assets/image-20260422181120240.png)
+
+![Listening-history recommendation demo, part 2](assets/image-20260422181321779.png)
+
+### 3. Monthly and Yearly Wrapped
+
+Commands shown:
+
+```bash
+python3 -m src.main wrapped --user user_001 --period year --year 2026
+
+python3 -m src.main wrapped --user user_001 --period year --year 2026 --no-gemini
+
+python3 -m src.main wrapped --user user_001 --period month --year 2026 --month 4 --no-gemini
+```
+
+What it shows:
+
+- Generates a yearly listening summary for `user_001` by filtering listening-history records for 2026.
+- Computes recap statistics deterministically, including weighted plays, average energy, top songs, top artists, inferred top albums, and taste signals.
+- Uses capped rankings instead of dumping the full history: up to 10 songs, 5 artists, 5 albums, 5 genres, 5 moods, and 5 tags.
+- Shows `Focus Flow` as the top song, `LoRoom` as the top artist, and `Night Study Tapes` as the top inferred album for the current sample data.
+- Uses Gemini in the first run to rewrite the computed statistics into a short narrative taste summary.
+- Uses deterministic recap text in the `--no-gemini` runs, demonstrating that the wrapped feature still works when Gemini is disabled or unavailable.
+- Shows that monthly and yearly recap logic use the same aggregation pipeline; in this dataset, April 2026 and the full year 2026 are similar because the sample listening history is concentrated in April.
+- Keeps all rankings deterministic: Gemini only writes the narrative summary and does not calculate top songs, artists, albums, or taste signals.
+
+![Wrapped recap demo, part 1](assets/image-20260422181920720.png)
+
+![Wrapped recap demo, part 2](assets/image-20260422181958857.png)
+
+![Wrapped recap demo, part 3](assets/image-20260422182549524.png)
+
+### 4. Sheet Music Matching
+
+Commands shown:
+
+```bash
+python3 -m src.main sheet --song "Library Rain" --instrument piano --difficulty beginner --no-gemini
+
+python3 -m src.main sheet --song "Library Rain" --instrument piano --difficulty beginner
+```
+
+What it shows:
+
+- Retrieves `Library Rain` by `Paper Lanterns` as the matched catalog song and reports `Search confidence: 1.00`.
+- Searches the local sheet music metadata for piano arrangements and ranks matches by song title, artist, instrument, difficulty, shared mood tags, light-music energy fit, and beginner-friendly arrangement flags.
+- Uses `--difficulty beginner` to prioritize beginner-level arrangements while still allowing nearby difficulty levels to appear lower in the ranking.
+- Shows the top match as the beginner piano solo arrangement for `Library Rain`, with score breakdowns explaining why it ranked first.
+- Uses `--no-gemini` in the first run, so the explanation is generated deterministically from retrieved sheet music metadata.
+- Runs without `--no-gemini` in the second run to test the optional Gemini explanation layer.
+- Demonstrates reliability behavior: Gemini returned an incomplete explanation, so the system rejected it and fell back to deterministic text with `fallback_reason: invalid_gemini_sheet_explanation`.
+- Keeps sheet music matching deterministic: Gemini does not create sheet music, invent links, or change the ranked results; it only attempts to explain the top match.
+
+![Sheet music matching demo, part 1](assets/image-20260422181802218.png)
+
+![Sheet music matching demo, part 2](assets/image-20260422181837152.png)
 
 ## Logging and Guardrails
 The system includes several reliability guardrails:
@@ -390,7 +483,7 @@ The system includes several reliability guardrails:
 Run the current test suite with:
 
 ```bash
-pytest
+python3 -m pytest
 ```
 
 The current test suite passes with `41 passed`. These tests cover base recommendation scoring, song search, similar-song ranking, intent parsing and fallback behavior, listening-history aggregation, song and album recommendation, playlist package validation, wrapped recap period filtering, top song/artist/album statistics, sheet music loading and ranking, instrument and difficulty filtering, truncated AI explanation rejection, Gemini debug-response logging, and missing-user handling.
