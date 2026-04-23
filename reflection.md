@@ -100,7 +100,13 @@ During implementation, I changed the local Gemini setup from manually exporting 
 
 The important guardrail is that `.env` is listed in `.gitignore`, so secrets stay local and are not staged by normal `git add .` usage. This is a small but important engineering detail: AI integrations often depend on external credentials, and the setup should be convenient without encouraging hardcoded or committed API keys.
 
-## 5. Final Result and Takeaways
+## 5. Reliability, Ethics, and Final Takeaways
+Reliability testing changed the system design. Gemini worked well for some language tasks, but it also exposed practical failure modes: quota limits, unsupported model names, timeouts, malformed JSON, and truncated explanations. The surprising part was that even a very short sheet music explanation could come back incomplete, which led me to add output-quality validation and deterministic fallback instead of trusting AI text by default.
+
+The system also has ethical and misuse risks. A user could over-read a generated taste summary as a deep identity judgment, or mistake local sheet music metadata for verified real-world score availability. To reduce those risks, the app keeps rankings deterministic, labels AI-generated sections clearly, avoids inventing links or IDs, and falls back to grounded deterministic text when AI output is weak.
+
+AI collaboration helped most during architecture and reliability review. A helpful suggestion was separating AI language tasks from deterministic ranking tasks. A flawed suggestion was the early JSON-based playlist explanation design, where Gemini was expected to produce structured package data. Testing showed that this was fragile, so the final design moved structure back into local code and limited Gemini to explanations.
+
 The final system now includes four implemented workflows:
 
 - Similar-song recommendation from a searched song, with optional Gemini intent parsing.

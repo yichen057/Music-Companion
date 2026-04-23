@@ -107,7 +107,7 @@ The system includes these guardrails:
 - CLI output makes AI-generated and fallback sections visible.
 - Tests cover ranking, retrieval, fallback, validation, and edge cases.
 
-## Limitations and Risks
+## Limitations, Biases, and Misuse Risks
 - The catalog and listening history are small and partially simulated.
 - Recommendation quality depends heavily on metadata quality and coverage.
 - The system is metadata-based, not audio-based.
@@ -117,12 +117,16 @@ The system includes these guardrails:
 - Wrapped summaries can oversimplify a user's taste if the listening history is sparse.
 - Popularity, language, and catalog coverage biases can affect recommendations.
 
+Potential misuse includes presenting generated explanations as factual proof, claiming that local sheet music metadata represents real-world availability, or using sparse listening history to make overconfident claims about a user's identity. The system reduces these risks by labeling AI-generated and fallback sections, keeping rankings deterministic, refusing to invent sheet music links, and grounding summaries in retrieved metadata and computed statistics.
+
 ## Testing Status
 The current test suite passes with:
 
 ```text
 41 passed
 ```
+
+Reliability testing showed that Gemini was useful for nuanced intent parsing and playlist explanations, but it also failed in realistic ways: API quota limits, unsupported model names, timeouts, malformed JSON, and truncated sheet music explanations. The system improved after adding deterministic fallback, clearer fallback reasons, output validation, and debug logging.
 
 The automated tests cover:
 
@@ -142,7 +146,9 @@ The automated tests cover:
 - missing-user and invalid-input behavior
 
 ## Human-AI Collaboration Reflection
-AI assistance was useful for brainstorming workflows, organizing documentation, and identifying reliability risks such as hallucinated IDs, malformed JSON, API quota failures, and over-trusting generated text.
+AI assistance was useful for brainstorming workflows, organizing documentation, and identifying reliability risks such as hallucinated IDs, malformed JSON, API quota failures, and over-trusting generated text. One helpful suggestion was to keep Gemini out of final ranking decisions and use it only for structured intent parsing or grounded explanations. That became the main architecture principle.
+
+One flawed direction was initially asking Gemini to return full playlist JSON with song IDs. Testing showed this was brittle because the model could return malformed JSON or invalid structure. I replaced that design with deterministic package construction and Gemini-only line-based explanations.
 
 Implementation still required direct engineering decisions. I had to inspect CLI output, tune the AI boundary, add deterministic fallbacks, validate responses, and write automated tests. The strongest lesson was that AI should improve language understanding and explanation quality, but deterministic code should own the parts that must be correct.
 

@@ -107,6 +107,14 @@ The project also includes a reliability layer:
 
 These guardrails are part of the application logic and are intended to reduce unsupported or misleading outputs.
 
+## Stretch Features Addressed
+This project addresses two optional stretch features:
+
+- **RAG Enhancement:** The system uses structured retrieval across multiple local data sources, including songs, albums, listening history, and sheet music metadata. Gemini outputs are grounded in retrieved or computed context rather than generated from an empty prompt.
+- **Test Harness / Evaluation Script:** The project includes an automated pytest suite covering recommendation ranking, search, intent fallback, playlist validation, wrapped recap statistics, sheet music matching, truncated AI output rejection, debug-response logging, and error handling.
+
+The system also uses multi-step workflows such as retrieve -> rank -> explain -> validate -> fallback, but it does not claim full agentic autonomy or fine-tuning.
+
 ## System Architecture
 The system architecture diagram is stored in the `assets/` folder and can be embedded here as an image or represented as a Mermaid diagram.
 
