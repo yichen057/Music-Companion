@@ -1,0 +1,17 @@
+sheet_id,song_title,artist,instrument,difficulty,arrangement_style,key_signature,page_count,source_type,mood_tags,beginner_friendly
+201,Library Rain,Paper Lanterns,piano,beginner,solo piano,C major,3,lead sheet,peaceful|dreamy|cozy,true
+202,Library Rain,Paper Lanterns,guitar,beginner,fingerstyle,C major,2,chord tab,peaceful|dreamy|cozy,true
+203,Midnight Coding,LoRoom,piano,intermediate,solo piano,A minor,4,full score,dreamy|focused|nocturnal,true
+204,Midnight Coding,LoRoom,guitar,intermediate,fingerstyle,A minor,3,tab,dreamy|focused|nocturnal,false
+205,Focus Flow,LoRoom,piano,beginner,loop study,E minor,2,lead sheet,focused|minimal|steady,true
+206,Focus Flow,LoRoom,guitar,beginner,chord melody,E minor,2,chord chart,focused|minimal|steady,true
+207,Spacewalk Thoughts,Orbit Bloom,piano,intermediate,ambient piano,D major,5,full score,dreamy|reflective|ethereal,false
+208,Spacewalk Thoughts,Orbit Bloom,guitar,advanced,ambient fingerstyle,D major,5,tab,dreamy|reflective|ethereal,false
+209,Ghost Waltz,Pale Ember,piano,advanced,classical reduction,G minor,6,full score,melancholic|haunting|intimate,false
+210,Echoes of Kyoto,Sora,piano,intermediate,solo piano,D minor,4,full score,reflective|ethereal|peaceful,false
+211,Echoes of Kyoto,Sora,guitar,intermediate,fingerstyle,D minor,4,tab,reflective|ethereal|peaceful,false
+212,Sunday Morning Tea,Willow Haze,guitar,beginner,acoustic chords,G major,2,chord chart,peaceful|nostalgic|warm,true
+213,Sunday Morning Tea,Willow Haze,piano,beginner,solo piano,G major,3,lead sheet,peaceful|nostalgic|warm,true
+214,Coffee Shop Stories,Slow Stereo,piano,intermediate,jazz lead sheet,F major,4,lead sheet,nostalgic|warm|intimate,false
+215,Blue Smoke,Thelma Roads,guitar,intermediate,chord melody,Bb major,3,chord chart,romantic|intimate|warm,false
+216,Night Drive Loop,Neon Echo,piano,intermediate,synth piano,F minor,4,lead sheet,nostalgic|nocturnal|cinematic,false

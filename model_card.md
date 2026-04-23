@@ -1,239 +1,167 @@
 # Model Card: Music Companion
 
-## System Name
-Music Companion
+## System Summary
+Music Companion is an AI-assisted music discovery and reflection application built from an original content-based music recommender. The base recommender scores songs from structured metadata, and the expanded system adds similar-song search, user-level listening-history recommendations, monthly/yearly music summaries, and metadata-based sheet music matching.
 
-## Project Summary
-Music Companion is an AI-powered music application that extends a base content-based recommender into a broader system for recommendation, listening-history analysis, recap generation, and sheet music matching.
+The main design principle is that deterministic code owns retrieval, ranking, IDs, validation, and fallback behavior. Gemini is used only for constrained language tasks: intent parsing, playlist explanations, recap narratives, and optional sheet music explanations.
 
-## Base Functionality
-The base system is a content-based music recommender implemented in [src/recommender.py](src/recommender.py). Songs are represented by structured metadata, and users are represented by a taste profile. The system scores each song against the profile and returns the highest-ranked results.
+## Base Project
+The original project was a **Music Recommender Simulation**. Songs were represented with metadata such as genre, mood, energy, acousticness, instrumentalness, popularity, decade, language, duration, replay value, and mood tags. User profiles were represented as structured preferences, and the system produced ranked song recommendations with score explanations.
 
-The current scoring system uses:
+The base scoring engine supports:
 
-- genre matching
-- mood matching
-- energy similarity
-- acousticness preference matching
-- instrumentalness preference matching
-- popularity preference matching
-- decade proximity
-- mood-tag overlap
-- language matching
-- duration proximity
-- replay-value matching
+- weighted feature matching
+- multiple scoring modes
+- optional diversity penalties
+- human-readable recommendation breakdowns
 
-The base recommender also supports multiple scoring modes and an optional diversity penalty.
+This deterministic recommender remains the ranking backbone of Music Companion.
 
-## AI-Enhanced Functionality
-The expanded application design adds four higher-level workflows.
-
+## Implemented Workflows
 ### 1. Similar Song Recommendation
-The user searches for a song, and the system retrieves the seed song's metadata before ranking other songs with similar attributes. If the user provides a natural-language intent, Gemini can parse that request into structured ranking adjustments while the local scoring engine still decides the final order.
+The user searches for a song, and the system retrieves the best matching seed song from the catalog. It builds a similarity profile from that song's metadata and ranks other songs locally. If the user provides natural-language intent, Gemini can parse that intent into structured ranking adjustments, but the local scoring engine still decides the final order.
 
-### 2. Habit-Based Recommendation
-The system aggregates listening history, builds a taste profile, and recommends songs and albums that fit the user's habits. This workflow is implemented with simulated listening-history data. It also groups ranked songs into playlist packages and can use Gemini to generate grounded package explanations from retrieved user-history and recommendation context. Gemini only writes explanations; local ranking and package construction decide the actual recommendations.
+### 2. Listening-History Recommendation
+The system aggregates a user's listening history, builds a taste profile, recommends songs and albums, and groups ranked songs into playlist packages. Gemini can write short package explanations from retrieved history and ranked candidates, but it does not choose songs or generate trusted song IDs.
 
-### 3. Monthly and Yearly Music Wrapped
-The system summarizes listening activity over time and generates a recap with capped deterministic rankings: up to 10 top songs, 5 top artists, 5 inferred top albums, 5 top genres, 5 top moods, 5 top tags, average energy, and a taste summary. This workflow is implemented for monthly and yearly periods. Gemini is optional and only rewrites the computed recap statistics into a short narrative summary.
+### 3. Monthly and Yearly Music Summaries
+The system filters listening history by month or year and computes deterministic recap statistics: up to 10 top songs, 5 top artists, 5 inferred top albums, 5 top genres, 5 top moods, 5 top tags, and average energy. Gemini is optional and only rewrites those computed statistics into a short narrative summary.
 
 ### 4. Sheet Music Matching
-The system retrieves sheet music resources that best match a requested song, instrument, and difficulty level, especially for piano and guitar.
+The system retrieves sheet music metadata for piano and guitar arrangements, then ranks matches by song, artist, instrument, difficulty, mood-tag overlap, light-music fit, and beginner-friendly flags. Gemini is optional and only explains the top ranked arrangement from retrieved metadata. It does not create sheet music, verify real-world availability, or invent links.
 
 ## Intended Use
 This project is intended for:
 
-- experimentation with explainable recommendation workflows
-- testing retrieval-based recommendation and recap logic
-- lightweight music discovery and reflection scenarios
+- explainable music recommendation experiments
+- lightweight music discovery from structured catalog metadata
+- user-level listening-history analysis
+- monthly and yearly listening summaries
+- piano and guitar sheet music metadata matching
 
 It is not intended for:
 
 - commercial music streaming deployment
 - music licensing or rights decisions
 - professional sheet music publishing
+- verified external sheet music search
 - high-stakes decision-making
 
-## Intended Users
-The system is designed for:
-
-- music listeners exploring similar songs
-- users who want general music and album recommendations
-- users who want monthly or yearly listening summaries
-- beginner and casual musicians searching for piano or guitar sheet music
-
-## Core AI Features
-### Retrieval-Augmented Generation
-The system retrieves structured context before producing outputs. For example:
-
-- song search retrieves seed-song metadata before recommending similar tracks
-- listening recap retrieves aggregated statistics before generating summary text
-- sheet music matching retrieves music-sheet entries before ranking options
-
-This grounding step is central to the system design.
-
-### Gemini Integration
-Gemini is used in two constrained ways. For similar-song search, it parses optional user intent into structured fields that the recommender can validate and apply. For habit-based recommendation, it writes short playlist package explanations from locally retrieved listening history, ranked songs, ranked albums, and optional context. For wrapped recaps, it can rewrite computed listening-history statistics into a concise narrative summary. Gemini does not directly select final songs, produce trusted song IDs, or compute ranking statistics. If Gemini times out, exceeds quota, fails, or returns unparseable output, the system automatically uses a deterministic fallback and reports the fallback source and short error detail. The CLI labels deterministic, AI-generated, and fallback sections so users can tell which parts used Gemini.
-
-### Reliability and Validation
-The system includes planned validation and fallback behavior:
-
-- recap outputs are checked against computed statistics
-- missing or ambiguous inputs are handled safely
-- logging captures retrieval and ranking steps
-- fallback summaries are used when data is insufficient
-- Gemini parser outputs are validated, clamped, and backed up by a local rule-based parser
-- Gemini playlist explanations are attached to deterministic package structures, so recommendation membership remains locally controlled
-
-These are the main advanced AI components of the project and they are integrated directly into the recommendation, recap, and matching workflows.
-
-## Inputs
-The full application design accepts:
-
-- song title queries
-- optional natural-language intent text for similar-song search
-- user identifiers
-- listening history records
-- recap time windows such as month or year
+## Inputs and Outputs
+### Inputs
+- song title or artist queries
+- optional natural-language intent for similar-song search
+- user IDs from the listening-history dataset
+- month or year recap windows
 - sheet music requests with instrument and optional difficulty
+- optional Gemini API configuration through `.env`
 
-## Outputs
-The system may return:
-
-- similar-song recommendations
-- parsed intent adjustments and confidence scores
-- personalized song and album recommendations
-- playlist packages with grounded explanations
-- monthly and yearly listening recaps
-- sheet music matches
-- explanation text grounded in retrieved metadata
-
-The system separates three scoring concepts: search confidence measures seed-song retrieval quality, intent confidence measures how strongly Gemini or the fallback parser understood the user's natural-language adjustment, and song score measures candidate-song fit against the final adjusted profile.
+### Outputs
+- similar-song recommendations with scores and explanations
+- parsed intent adjustments and intent confidence
+- user-level song and album recommendations
+- playlist packages with deterministic or Gemini-written explanations
+- monthly/yearly top songs, artists, inferred albums, taste tags, and summaries
+- sheet music metadata matches for piano or guitar
+- fallback reasons when Gemini is unavailable or invalid
 
 ## Data Sources
-### Current Data
-- [data/songs.csv](data/songs.csv)
-- [data/albums.csv](data/albums.csv)
-- [data/listening_history.csv](data/listening_history.csv)
+Current local datasets:
 
-### Planned Data
-- `data/sheet_music.csv`
+- [data/songs.csv](data/songs.csv): song catalog metadata
+- [data/albums.csv](data/albums.csv): album metadata for album recommendation and inferred wrapped albums
+- [data/listening_history.csv](data/listening_history.csv): simulated user listening logs
+- [data/sheet_music.csv](data/sheet_music.csv): curated piano/guitar sheet music metadata
 
-The current implementation supports song-level recommendation, similar-song search, and habit-based song and album recommendation. The remaining workflows depend on the planned datasets being added and validated.
+The project does not currently use live music APIs, audio analysis, web search, or licensed sheet music providers.
 
-## How the System Works
-### Base Recommender
-The system loads songs, compares each song to a structured user profile, computes a weighted score, and returns the top-ranked results.
+## AI Features and Boundaries
+### Structured Retrieval-Grounded Generation
+The project uses structured data retrieval before generation. Gemini never receives an empty prompt; it receives retrieved or computed context such as seed song metadata, listening-history statistics, ranked candidates, playlist package names, recap statistics, or sheet music metadata.
 
-### Similar Song Recommendation
-The system retrieves a seed song from the catalog, reuses its features as a similarity profile, optionally adjusts that profile with parsed intent, and ranks other songs against the final profile.
+### Gemini Intent Parsing
+For similar-song search, Gemini parses natural-language intent into structured fields such as energy adjustment, preferred mood, required language, preferred tags, and instrumental/acoustic preferences. These values are validated before they affect local ranking.
 
-### Habit-Based Recommendation
-The system aggregates listening history into summary statistics such as top genres, top artists, top moods, top tags, language preference, and typical energy levels, then converts those signals into recommendation targets for songs and albums. Ranked songs are grouped locally into playlist packages such as Core Taste Mix, Context Fit, and Discovery Stretch. Gemini receives a compact retrieved context and returns line-based package explanations, which are attached to the local package structure; deterministic fallback explanations are used if the AI call fails.
+### Gemini Explanation and Narrative Layers
+For listening-history recommendations, Gemini writes playlist package explanations. For wrapped recaps, Gemini may rewrite deterministic statistics into a short narrative. For sheet music matching, Gemini may explain why the top ranked arrangement fits.
 
-### Monthly and Yearly Wrapped
-The system filters listening history by time period, computes capped rankings for songs, artists, inferred albums, genres, moods, and tags, then generates a recap grounded in those statistics. The caps are intentional: top songs are limited to 10, and artist/album/genre/mood/tag lists are limited to 5. Gemini is optional and only rewrites the narrative summary; deterministic fallback text is used when AI is unavailable.
+In all cases, Gemini does not control final recommendation membership, ranking statistics, song IDs, or sheet music availability.
 
-### Sheet Music Matching
-The system will retrieve matching sheet music resources based on song title, instrument, and optionally difficulty, then rank the best available options.
+## Reliability and Guardrails
+The system includes these guardrails:
+
+- deterministic fallback when Gemini fails, times out, exceeds quota, or returns invalid output
+- explicit CLI labels for deterministic, AI-generated, and AI fallback sections
+- validation and clamping for Gemini intent outputs
+- local package structures for playlist recommendations, so Gemini cannot invent song IDs
+- capped wrapped recap rankings to avoid dumping or fabricating listening history
+- input validation for period, month, instrument, and difficulty
+- rejection of truncated or too-short Gemini sheet music explanations
+- `DEBUG_GEMINI=1` support for inspecting raw Gemini response metadata during debugging
+- local `.env` support for API keys, with `.env` ignored by git
 
 ## Strengths
-- The base recommender is transparent and explainable.
-- Weighted feature matching makes recommendation behavior easy to inspect.
-- Diversity penalties reduce repetitive results.
-- Retrieval-based design keeps generated text tied to real data.
-- The application covers both recommendation and reflective summary use cases.
+- Recommendation behavior is explainable because scoring remains deterministic.
+- Retrieval-first design grounds generated text in local data.
+- Fallback behavior keeps the app usable without Gemini.
+- CLI output makes AI-generated and fallback sections visible.
+- Tests cover ranking, retrieval, fallback, validation, and edge cases.
 
-## Limitations
-- The current repository uses a small and partially simulated music catalog.
-- Recommendation quality depends heavily on metadata quality.
-- The current scoring logic is metadata-based rather than audio-based.
-- The sheet-music workflow requires additional implementation and an additional dataset.
-- Top albums are inferred from current song and album metadata because the song catalog does not yet include album IDs.
-- Exact string matching can be too rigid for related moods or genres.
+## Limitations and Risks
+- The catalog and listening history are small and partially simulated.
+- Recommendation quality depends heavily on metadata quality and coverage.
+- The system is metadata-based, not audio-based.
+- Top albums are inferred because `songs.csv` does not include album IDs.
+- Sheet music matching uses curated metadata and does not verify real-world score availability.
+- Exact string matching can be rigid for related moods, genres, or alternate song names.
+- Wrapped summaries can oversimplify a user's taste if the listening history is sparse.
+- Popularity, language, and catalog coverage biases can affect recommendations.
 
-## Biases and Risks
-### Metadata Bias
-If tags such as genre, mood, or language are incomplete or inconsistent, recommendations may be skewed.
+## Testing Status
+The current test suite passes with:
 
-### Catalog Coverage Bias
-Genres with only one or two songs are disadvantaged compared with genres that have more entries.
+```text
+41 passed
+```
 
-### Popularity Bias
-Songs marked as popular may receive repeated advantages, while niche songs remain buried.
+The automated tests cover:
 
-### Language Bias
-If the catalog contains mostly one language, multilingual or non-English listeners may receive weaker personalization.
-
-### Summary Simplification Risk
-Monthly or yearly recap text may oversimplify a user's listening identity if it compresses diverse behaviors into a small number of labels.
-
-## Failure Cases
-- the song query does not match any title in the catalog
-- multiple songs match the same query ambiguously
-- listening history is too sparse to build a stable taste profile
-- top recap outputs conflict with summary text
-- no sheet music exists for the requested instrument or difficulty
-
-## Guardrails
-The full project design includes:
-
-- input validation for CLI arguments, Gemini outputs, and dataset fields
-- fallback responses for missing song or sheet music matches
-- recap validation against computed statistics
-- logging of retrieval, ranking, and validation decisions
-- safe handling of insufficient listening history
-- automatic local fallback when Gemini is unavailable, including reported fallback reasons such as HTTP or network errors
-
-## Testing Strategy
-The testing plan covers:
-
-- correctness of base recommender ranking
-- exact and partial song-query matching
-- exclusion of the seed song from similar-song outputs
-- user-history aggregation and profile building
-- recap statistics for monthly and yearly filtering
-- validation checks for recap consistency
-- instrument and difficulty filtering for sheet music matches
-- edge cases involving missing or ambiguous inputs
-
-## Current Testing Status
-The current repository includes tests for the base recommender in [tests/test_recommender.py](tests/test_recommender.py), similar-song search tests in [tests/test_search.py](tests/test_search.py), listening-history recommendation tests in [tests/test_history.py](tests/test_history.py), and playlist package tests in [tests/test_playlist.py](tests/test_playlist.py). The current test suite passes with `32 passed`. Manual evaluation of the base system found:
-
-- strong performance when profile preferences align with the catalog
-- improved behavior after reducing genre dominance and increasing energy weight
-- better result variety when diversity penalties are enabled
-- visible failure cases for rare genres, exact-match rigidity, and sparse catalog coverage
-
-The sheet-music workflow is still under implementation and will require additional automated tests once its module and dataset are added.
-
-## Planned Evaluation
-The next evaluation steps are:
-
-- additional ranking checks for more varied user histories
-- validation checks for monthly and yearly recap statistics
-- error-handling tests for missing song queries and missing sheet music
-- manual review of recommendation quality and recap accuracy
+- base recommender scoring
+- exact and partial song search
+- similar-song ranking and seed exclusion
+- local intent parsing and Gemini fallback labeling
+- unsafe intent validation and profile adjustment
+- listening-history aggregation and taste-profile construction
+- song and album recommendation from history
+- playlist package generation and validation
+- monthly/yearly recap period filtering and top-stat calculations
+- sheet music metadata loading, ranking, instrument filtering, and difficulty filtering
+- deterministic fallback behavior
+- truncated AI explanation rejection
+- Gemini debug-response logging
+- missing-user and invalid-input behavior
 
 ## Human-AI Collaboration Reflection
-AI tools were useful during the design process for brainstorming user workflows, naming modules, framing system architecture, and refining documentation structure. They also helped surface blind spots such as catalog bias, popularity feedback loops, and the need to separate base functionality from AI-enhanced functionality in the documentation.
+AI assistance was useful for brainstorming workflows, organizing documentation, and identifying reliability risks such as hallucinated IDs, malformed JSON, API quota failures, and over-trusting generated text.
 
-However, implementation details still require manual verification. Score calculations, ranking behavior, dataset design, and testing logic must be checked directly in code. AI assistance accelerated planning and writing, but it did not replace the need for precise engineering decisions or manual validation.
+Implementation still required direct engineering decisions. I had to inspect CLI output, tune the AI boundary, add deterministic fallbacks, validate responses, and write automated tests. The strongest lesson was that AI should improve language understanding and explanation quality, but deterministic code should own the parts that must be correct.
 
 ## Changes from the Base Project
-Compared with the original music recommender simulation, this expanded project adds a broader product direction:
+Compared with the original recommender simulation, Music Companion adds:
 
-- similar-song retrieval from song search
-- listening-history-based personalization
-- monthly and yearly listening recaps
-- sheet music matching
-- logging and validation as first-class design requirements
-
-The original weighted recommender remains the core ranking component.
+- song-search-based similar recommendation
+- Gemini intent parsing with rule-based fallback
+- user-level listening-history recommendation
+- album recommendation and playlist package generation
+- monthly and yearly listening summaries
+- sheet music metadata matching for piano and guitar
+- `.env`-based API key loading
+- stronger validation, fallback behavior, and automated tests
 
 ## Future Work
-- AI performer workflows
-- Suno-style reinterpretation prompts
-- multi-instrument arrangement planning
+- AI performer workflows and Suno-style reinterpretation prompts
+- live sheet music provider or licensed API integration
 - audio embeddings for richer similarity search
-- stronger evaluation metrics for personalization quality
+- stronger personalization evaluation metrics
+- larger and more realistic listening-history datasets
+- album IDs in the song catalog for more accurate wrapped album rankings

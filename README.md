@@ -1,16 +1,14 @@
 # Music Companion
 
 ## Project Overview
-Music Companion is an AI-powered music discovery and reflection app built on top of a base content-based recommender. The original project ranked songs from a small catalog using handcrafted feature matching. This expanded version keeps that explainable scoring core and extends it into a broader AI-assisted music experience with four user-facing workflows:
+Music Companion is an AI-powered music discovery and reflection app built on top of a base content-based recommender. The original project ranked songs from a small catalog using handcrafted feature matching. This expanded version keeps that explainable scoring core and adds four user-facing workflows:
 
 1. Similar-song recommendation from a searched song
-2. Personalized song and album recommendation from listening history
-3. Monthly and yearly listening recap generation
-4. Sheet music matching for light music, especially piano and guitar
+2. User-level song and album recommendation from listening history
+3. Monthly and yearly listening summaries
+4. Metadata-based sheet music matching for light piano and guitar arrangements
 
-This project integrates Retrieval-Augmented Generation (RAG), Gemini-powered intent parsing, and a reliability-focused validation layer into its main application logic.
-
-Its main goal is to show how retrieval, ranking, summarization, and guardrails can work together inside one music application.
+The project uses structured retrieval-grounded generation, Gemini-powered intent parsing, optional Gemini narrative/explanation layers, and reliability guardrails. The main design principle is that deterministic code owns retrieval, ranking, IDs, validation, and fallback behavior, while Gemini only helps parse intent or explain already-retrieved data.
 
 ## Original Project
 This project extends the original **Music Recommender Simulation** from Modules 1 to 3. The original version represented songs and user preferences as structured data, applied weighted feature matching to score songs, and returned ranked recommendations with short explanations. It already supported multiple scoring modes and diversity-aware ranking, but it did not yet include retrieval-driven song search, listening-history analysis, recap generation, or sheet music matching.
@@ -27,8 +25,8 @@ The current scoring engine in [src/recommender.py](src/recommender.py) includes:
 
 This base logic remains the ranking backbone of the app.
 
-## AI-Enhanced Functionality
-The extended project adds four AI-related workflows on top of the scoring engine.
+## Implemented Workflows
+The expanded project adds four workflows on top of the scoring engine. Some workflows use Gemini directly, while others are primarily deterministic with optional AI-written explanations.
 
 ### 1. Similar Song Recommendation
 The user searches for a song, and the system retrieves the seed song's metadata before finding other songs with similar attributes such as genre, mood, energy, decade, language, and tags. The user can also provide a natural-language intent, such as "more energetic but still instrumental for studying." When a `GEMINI_API_KEY` is available, Gemini parses that intent into structured ranking adjustments; otherwise, the app falls back to a local rule-based parser. If Gemini times out or returns an invalid response, the fallback happens automatically and the CLI displays the fallback source.
@@ -63,12 +61,13 @@ python3 -m src.main wrapped --user user_001 --period month --year 2026 --month 4
 ```
 
 ### 4. Sheet Music Matching
-The system finds sheet music entries that best match a requested song, instrument, and optionally a difficulty level. The first version focuses on metadata-based matching for piano and guitar.
+The system finds sheet music entries that best match a requested song, instrument, and optionally a difficulty level. The current implementation focuses on metadata-based matching for light music arrangements, especially piano and guitar. Matching and ranking are deterministic: the app retrieves the song, filters by instrument, scores arrangement metadata, and returns ranked sheet music options. Gemini is optional and only writes a short explanation for the top match from retrieved metadata.
 
-Planned CLI:
+Implemented CLI:
 
 ```bash
-python3 -m src.main sheet --song "River Flows in You" --instrument piano
+python3 -m src.main sheet --song "Library Rain" --instrument piano --difficulty beginner
+python3 -m src.main sheet --song "Focus Flow" --instrument guitar --difficulty beginner --no-gemini
 ```
 
 ## AI Integration
@@ -84,12 +83,14 @@ Before the system generates recommendations, summaries, or explanations, it firs
 
 The generated output is therefore grounded in retrieved data rather than produced from an empty prompt.
 
-### Gemini Intent Parsing
+### Gemini Usage Boundaries
 For similar-song search, Gemini is used as a constrained intent parser. It does not directly choose songs. Instead, it converts natural-language requests into structured fields such as `energy_delta`, `preferred_mood`, `required_language`, and `preferred_tags`. The deterministic scoring engine then uses those fields to rank songs, which keeps the final recommendation explainable and testable.
 
 For habit-based recommendation, Gemini is used as a grounded playlist explainer. The local system first aggregates listening history, ranks songs and albums, and builds playlist packages. Gemini then receives a compact retrieved context and writes only the `why_it_fits` explanation for each package. It does not choose songs, invent IDs, or change package membership.
 
 For monthly and yearly wrapped recaps, the core work is deterministic statistics, not AI generation. The local system computes top songs, top artists, inferred top albums, genres, moods, tags, and average energy from listening history. Gemini is optional and only writes a short narrative summary from those computed statistics, while deterministic fallback text remains available if the AI call fails.
+
+For sheet music matching, the core work is deterministic metadata retrieval and ranking. The local system matches the requested song, instrument, and difficulty against sheet music metadata. Gemini is optional and only writes a short explanation of why the top ranked arrangement fits; it does not invent sheet music links or change the ranking.
 
 ### Reliability and Validation
 The project also includes a reliability layer:
@@ -100,6 +101,8 @@ The project also includes a reliability layer:
 - retrieval and ranking steps are logged for debugging
 - Gemini intent outputs are validated and clamped before they affect ranking
 - Gemini playlist explanations are attached to locally generated package structures rather than trusted to define recommendation membership
+- Gemini sheet music explanations are grounded in retrieved arrangement metadata and do not create new sheet music entries
+- truncated or too-short Gemini sheet music explanations are rejected and replaced with deterministic fallback text
 - local deterministic fallback explanations are used when Gemini is unavailable, times out, exceeds quota, or returns an unparsable response, and the CLI labels deterministic, AI-generated, and fallback sections explicitly
 
 These guardrails are part of the application logic and are intended to reduce unsupported or misleading outputs.
@@ -145,7 +148,7 @@ flowchart TD
 ```
 
 ## Architecture Overview
-The system is organized around a retrieval-first pipeline. User input enters through the command-line interface and is routed into one of the main workflows: similar-song search, habit-based recommendation, listening recap, or sheet music matching. Each workflow retrieves structured context from the relevant dataset before ranking, summarization, or matching takes place. The output is then checked through validation, logging, planned automated tests, and human review so that the system can surface grounded results and make failures easier to inspect.
+The system is organized around a retrieval-first pipeline. User input enters through the command-line interface and is routed into one of the main workflows: similar-song search, habit-based recommendation, listening recap, or sheet music matching. Each workflow retrieves structured context from the relevant dataset before ranking, summarization, or matching takes place. The output is then checked through validation, logging, automated tests, and human review so that the system can surface grounded results and make failures easier to inspect.
 
 ## Repository Structure
 ```text
@@ -166,12 +169,8 @@ The repository currently includes:
 - [data/albums.csv](data/albums.csv), which stores album-level metadata for habit-based album recommendation.
 - [data/listening_history.csv](data/listening_history.csv), which stores simulated user listening logs with timestamps and play counts.
 
-### Planned Dataset
-The full application design also expects:
-
-- `data/sheet_music.csv` for sheet music matching
-
-This dataset will support Feature 4.
+### Sheet Music Dataset
+The repository also includes [data/sheet_music.csv](data/sheet_music.csv), which stores sheet music metadata for piano and guitar arrangements, including difficulty, arrangement style, key signature, page count, source type, mood tags, and beginner-friendly flags.
 
 ## Setup
 ### 1. Create a virtual environment
@@ -245,6 +244,13 @@ python3 -m src.main wrapped --user user_001 --period month --year 2026 --month 4
 python3 -m src.main wrapped --user user_001 --period year --year 2026 --no-gemini
 ```
 
+It also supports Feature 4, sheet music matching:
+
+```bash
+python3 -m src.main sheet --song "Library Rain" --instrument piano --difficulty beginner
+python3 -m src.main sheet --song "Focus Flow" --instrument guitar --difficulty beginner --no-gemini
+```
+
 ### CLI Flags and Confidence Scores
 The `--k` flag controls how many recommendations are returned. For example, `--k 3` returns the top three similar songs; it does not control whether Gemini is called.
 
@@ -258,15 +264,8 @@ The CLI reports three different scoring concepts:
 
 For common requests, the local rule-based fallback often agrees with Gemini. For more nuanced language, Gemini provides more flexible intent extraction, while the fallback keeps the app reliable if the API fails. If Gemini fails, the app reports a fallback reason such as `HTTPError_403`, `HTTPError_429`, or `URLError`.
 
-### Planned Extended Commands
-This command represents the target interface for the remaining expanded workflow:
-
-```bash
-python3 -m src.main sheet --song "Song Title" --instrument piano
-```
-
 ## Example Workflows
-The following workflows describe the command-line interface for the expanded app. Similar-song search, habit-based recommendation, and wrapped recaps are implemented; sheet music matching will be added next.
+The following workflows describe the command-line interface for the expanded app. Similar-song search, habit-based recommendation, wrapped recaps, and sheet music matching are implemented.
 ### Example 1: Similar Song Search
 Input:
 
@@ -340,20 +339,21 @@ Current example output summary:
 Input:
 
 ```bash
-python3 -m src.main sheet --song "River Flows in You" --instrument piano
+python3 -m src.main sheet --song "Library Rain" --instrument piano --difficulty beginner
 ```
 
-Target output:
+Current output:
 
-- matching sheet music entries
-- instrument fit
-- difficulty notes
+- matched catalog song and search confidence
+- ranked sheet music entries for the requested instrument
+- difficulty, arrangement style, key signature, page count, and match score
+- deterministic or Gemini-written explanation grounded in sheet metadata
 
-Example interaction summary:
+Current example output summary:
 
-- The system retrieves sheet music entries that match the requested song and instrument.
-- It ranks the best matches using instrument fit and optional difficulty.
-- It returns the most suitable sheet music result with a short explanation.
+- The system matches `Library Rain` by `Paper Lanterns` with search confidence `1.00`.
+- It ranks the beginner piano arrangement as the top sheet music match.
+- The explanation references the retrieved arrangement metadata instead of inventing external links or unavailable scores.
 
 ## Demo Walkthrough
 Add one of the following before submission:
@@ -368,51 +368,26 @@ Suggested demo files:
 - `assets/demo-wrapped.png`
 - `assets/demo-sheet.png`
 
-## Existing Screenshots
-The repository already includes several screenshots from the original recommender experiments. These are stored in `assets/` and can be retained as evidence of the base system behavior, but the final submission should also include updated screenshots for the expanded workflows.
-
-- ![Base recommender output](assets/image-20260412200110616.png)
-- ![Stress test 1](assets/image-20260412203543635.png)
-- ![Stress test 2](assets/image-20260412203802020.png)
-- ![Stress test 3](assets/image-20260412203811607.png)
-- ![Stress test 4](assets/image-20260412203824500.png)
-- ![Stress test 5](assets/image-20260412203835549.png)
-- ![Stress test 6](assets/image-20260412203845449.png)
-
 ## Logging and Guardrails
-The expanded system is planned to include:
+The system includes several reliability guardrails:
 
-- structured logging for retrieval, ranking, and recap generation
-- safe handling of missing song queries
-- input validation for command arguments
-- recap validation against computed statistics
-- fallback messaging for insufficient listening history or missing sheet music
+- safe handling of missing or ambiguous song queries
+- input validation for command arguments such as period, month, instrument, and difficulty
+- deterministic fallback when Gemini is unavailable, times out, exceeds quota, or returns invalid output
+- explicit CLI labels for deterministic, AI-generated, and AI fallback sections
+- rejection of truncated Gemini sheet music explanations
+- debug support with `DEBUG_GEMINI=1` for inspecting raw Gemini response metadata
 
-## Current Testing Status
+## Testing Summary
 Run the current test suite with:
 
 ```bash
 pytest
 ```
 
-The repository currently includes automated tests for the base recommender, Feature 1 similar-song search, and Feature 2 listening-history recommendation with playlist package fallback behavior. Remaining workflows will add tests as they are implemented.
+The current test suite passes with `41 passed`. These tests cover base recommendation scoring, song search, similar-song ranking, intent parsing and fallback behavior, listening-history aggregation, song and album recommendation, playlist package validation, wrapped recap period filtering, top song/artist/album statistics, sheet music loading and ranking, instrument and difficulty filtering, truncated AI explanation rejection, Gemini debug-response logging, and missing-user handling.
 
-## Testing Plan
-The expanded test plan should cover:
-
-- seed-song retrieval correctness
-- Gemini/rule-based intent parsing validation
-- similar-song ranking behavior
-- user taste aggregation from history
-- history-based song and album recommendation
-- playlist package validation and deterministic fallback behavior
-- monthly and yearly recap statistics
-- recap validation logic
-- sheet music matching behavior
-- edge cases for missing or ambiguous data
-
-## Testing Summary
-The current test suite passes with `32 passed`. These tests cover the base recommender, exact and partial song search, seed-song profile construction, similar-song ranking, seed exclusion, missing-query error handling, local intent parsing, Gemini fallback labeling, validation of unsafe intent values, intent-based profile adjustment, listening-history aggregation, taste-profile construction, history-based recommendation, album ranking, playlist package generation, playlist output validation, deterministic playlist fallback behavior, wrapped recap period filtering, top song/artist/album statistics, deterministic recap fallback behavior, and missing-user handling. What is already clear from the existing system is that transparent scoring helps with debugging, while sparse metadata and exact-match rules can still produce brittle recommendations. End-to-end testing results for the remaining workflows will be added after implementation and verification.
+The main reliability finding is that transparent scoring and deterministic fallback make the system debuggable even when Gemini fails, times out, exceeds quota, or returns low-quality text.
 
 ## Design Decisions
 - The project keeps the original rule-based scoring engine because it is transparent, explainable, and easier to validate than a fully opaque recommendation model.
@@ -442,15 +417,15 @@ These observations motivate the move toward retrieval-driven workflows and stron
 - The current catalog is small and partially simulated.
 - Metadata quality strongly affects recommendation quality.
 - The current recommender is still metadata-based rather than audio-based.
-- Recap features are still planned and will depend on the quality of listening-history data.
-- Planned sheet music matching is based on metadata retrieval, not automatic transcription.
+- Wrapped recap quality depends on the quality and coverage of listening-history data.
+- Sheet music matching is based on metadata retrieval, not automatic transcription or real-time score generation.
 
 ## Future Work
-- AI performer workflows
-- Suno-style reinterpretation prompts
+- AI performer workflows and Suno-style reinterpretation prompts
+- live sheet music provider or licensed API integration instead of local metadata only
 - multi-instrument arrangement planning
 - audio embedding similarity instead of metadata-only matching
-- richer album and playlist recommendation
+- richer album, playlist, and recap datasets
 
 ## Reflection
 Building Music Companion reinforced that useful AI systems depend on more than generation alone. Retrieval, ranking, validation, and fallback behavior all matter if the system is expected to produce outputs that are understandable and trustworthy. This project also highlighted a practical trade-off: explainable systems are easier to debug and document, but they still depend heavily on the quality and coverage of the underlying data. For a deeper discussion of biases, risks, testing, and human-AI collaboration, see [model_card.md](model_card.md).

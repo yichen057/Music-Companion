@@ -24,6 +24,11 @@ from src.history import (
 from src.playlist import generate_playlist_packages
 from src.recommender import load_songs, recommend_songs, max_score
 from src.search import explain_intent_adjustment, recommend_similar_songs
+from src.sheet_music import (
+    generate_sheet_explanation,
+    load_sheet_music,
+    rank_sheet_music,
+)
 from src.wrapped import build_wrapped_report
 
 
@@ -136,6 +141,55 @@ def print_playlist_packages(packages: dict, songs: list) -> None:
             if song_id in song_by_id
         ]
         print("Songs: " + ", ".join(titles))
+
+
+def print_sheet_music_results(
+    seed_song: dict,
+    confidence: float,
+    recommendations: list,
+    explanation: dict,
+) -> None:
+    """Print sheet music matches and explanation."""
+    print("\nMatched song for sheet music:")
+    print(f"- {seed_song['title']} by {seed_song['artist']} ({seed_song['genre']}, {seed_song['mood']})")
+    print(f"Search confidence: {confidence:.2f}")
+
+    print("\nSheet Music Explanation")
+    if explanation["source"] == "gemini":
+        print("AI-generated section: Gemini explained the ranked sheet music match from retrieved metadata.")
+    elif explanation["source"] == "fallback_deterministic":
+        print("AI fallback section: Gemini was unavailable, so deterministic sheet explanation was used.")
+    else:
+        print("Deterministic section: generated directly from sheet music metadata.")
+    print(f"- source: {explanation['source']}")
+    if explanation.get("fallback_reason"):
+        print(f"- fallback_reason: {explanation['fallback_reason']}")
+    if explanation.get("fallback_detail"):
+        print(f"- fallback_detail: {explanation['fallback_detail']}")
+    print(explanation["summary"])
+
+    rows = []
+    for rank, (sheet, score, reason) in enumerate(recommendations, 1):
+        rows.append([
+            f"#{rank}",
+            sheet["song_title"],
+            sheet["artist"],
+            sheet["instrument"],
+            sheet["difficulty"],
+            sheet["arrangement_style"],
+            sheet["key_signature"],
+            sheet["page_count"],
+            f"{score:.2f}",
+            reason.replace("Sheet match because: ", ""),
+        ])
+
+    print("\nSheet Music Matches")
+    print(tabulate(
+        rows,
+        headers=["Rank", "Song", "Artist", "Instrument", "Difficulty", "Style", "Key", "Pages", "Score", "Breakdown"],
+        tablefmt="grid",
+        maxcolwidths=[None, None, None, None, None, None, None, None, None, 70],
+    ))
 
 
 def print_wrapped_report(report: dict) -> None:
@@ -407,6 +461,39 @@ def run_history_recommendation(
     return 0
 
 
+def run_sheet_music_match(
+    song_query: str,
+    instrument: str,
+    difficulty: str | None,
+    k: int,
+    use_gemini: bool,
+) -> int:
+    """Run Feature 4: match sheet music for a song and instrument."""
+    songs = load_songs("data/songs.csv")
+    sheets = load_sheet_music("data/sheet_music.csv")
+
+    try:
+        seed_song, confidence, recommendations = rank_sheet_music(
+            song_query,
+            instrument,
+            songs,
+            sheets,
+            difficulty=difficulty,
+            k=k,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    explanation = generate_sheet_explanation(
+        seed_song,
+        recommendations,
+        use_gemini=use_gemini,
+    )
+    print_sheet_music_results(seed_song, confidence, recommendations, explanation)
+    return 0
+
+
 def run_wrapped_recap(
     user_id: str,
     period: str,
@@ -548,6 +635,39 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Use deterministic recap text instead of Gemini.",
     )
 
+    sheet_parser = subparsers.add_parser(
+        "sheet",
+        help="Find sheet music for a song, instrument, and optional difficulty.",
+    )
+    sheet_parser.add_argument(
+        "--song",
+        required=True,
+        help="Song title, artist, or title plus artist to match.",
+    )
+    sheet_parser.add_argument(
+        "--instrument",
+        required=True,
+        choices=["piano", "guitar"],
+        help="Instrument to search sheet music for.",
+    )
+    sheet_parser.add_argument(
+        "--difficulty",
+        default=None,
+        choices=["beginner", "intermediate", "advanced"],
+        help="Optional arrangement difficulty preference.",
+    )
+    sheet_parser.add_argument(
+        "--k",
+        type=int,
+        default=5,
+        help="Number of sheet music matches to return.",
+    )
+    sheet_parser.add_argument(
+        "--no-gemini",
+        action="store_true",
+        help="Use deterministic sheet music explanation instead of Gemini.",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -591,6 +711,14 @@ def main(argv: list[str] | None = None) -> int:
             args.period,
             args.year,
             args.month,
+            use_gemini=not args.no_gemini,
+        )
+    if args.command == "sheet":
+        return run_sheet_music_match(
+            args.song,
+            args.instrument,
+            args.difficulty,
+            args.k,
             use_gemini=not args.no_gemini,
         )
 
